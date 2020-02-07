@@ -353,15 +353,15 @@ func (asm *Assembler) transformComment(line []byte) error {
 // A C command supports: dest;comp;jump
 func (asm *Assembler) transformCCommand(line []byte) error {
 	originalContent := line
-	destCodeStr, line, err := asm.parseCCommandDestCode(line)
+	destCodeStr, line, err := asm.transformCCommandDestCode(line)
 	if err != nil {
 		return err
 	}
-	jumpCodeStr, line, err := asm.parseCCommandJumpCode(line)
+	jumpCodeStr, line, err := asm.transformCCommandJumpCode(line)
 	if err != nil {
 		return err
 	}
-	compCodeStr, err := asm.parseCCommandCompCode(line)
+	compCodeStr, err := asm.transformCCommandCompCode(line)
 	if err != nil {
 		return err
 	}
@@ -376,7 +376,7 @@ func (asm *Assembler) transformCCommand(line []byte) error {
 	return nil
 }
 
-func (asm *Assembler) parseCCommandDestCode(line []byte) (string, []byte, error) {
+func (asm *Assembler) transformCCommandDestCode(line []byte) (string, []byte, error) {
 	dest := bytes.IndexByte(line, '=')
 	destCodeStr := "000"
 	exist := false
@@ -390,7 +390,7 @@ func (asm *Assembler) parseCCommandDestCode(line []byte) (string, []byte, error)
 	return destCodeStr, line[dest+1:], nil
 }
 
-func (asm *Assembler) parseCCommandJumpCode(line []byte) (string, []byte, error) {
+func (asm *Assembler) transformCCommandJumpCode(line []byte) (string, []byte, error) {
 	jumpCodeStr := "000"
 	comp := bytes.IndexByte(line, ';')
 	if comp == -1 {
@@ -403,7 +403,7 @@ func (asm *Assembler) parseCCommandJumpCode(line []byte) (string, []byte, error)
 	return jumpCodeStr, line[:comp], nil
 }
 
-func (asm *Assembler) parseCCommandCompCode(line []byte) (string, error) {
+func (asm *Assembler) transformCCommandCompCode(line []byte) (string, error) {
 	compCodeStr, exist := cCommandCompMap[string(line)]
 	if !exist {
 		return "", asm.makeSyntaxErr(fmt.Sprintf("wrong c command of comp code format near %s", string(line)))
