@@ -60,6 +60,7 @@ const (
 	GreaterTP                                   // >
 	LessTP                                      // <
 	EqualTP                                     // =
+	BooleanNegativeTP                           // ~
 	IntegerTP                                   // 1010
 	StringTP                                    // "xxx"
 	IdentifierTP                                // varA
@@ -68,7 +69,7 @@ const (
 	SingleLineCommentTP                         // //
 )
 
-// keyWordTokenTPMap is the mapping from keyWord to the corresponding TokenTP.
+// keyWordTokenTPMap is the mapping from identifier to the corresponding TokenTP.
 var keyWordTokenTPMap = map[string]TokenType{
 	"class":       ClassTP,
 	"constructor": ConstructorTP,
@@ -93,7 +94,7 @@ var keyWordTokenTPMap = map[string]TokenType{
 	"return":      ReturnTP,
 }
 
-// simpleSymbolTokenTPMap is the mapping from simple symbol to the corresponding TokenTP.
+// simpleSymbolTokenTPMap is the mapping from simple identifier to the corresponding TokenTP.
 // There are some symbols which are very easy to distinguish, so we put those together.
 var simpleSymbolTokenTPMap = map[string]TokenType{
 	"{": LeftBraceTP,
@@ -113,6 +114,7 @@ var simpleSymbolTokenTPMap = map[string]TokenType{
 	">": GreaterTP,
 	"<": LessTP,
 	"=": EqualTP,
+	"~": BooleanNegativeTP,
 }
 
 type Token struct {
@@ -121,6 +123,14 @@ type Token struct {
 	startPos int
 	endPos   int
 	tp       TokenType
+}
+
+func (t *Token) Value(tp TokenType) interface{} {
+	switch tp {
+	case IdentifierTP:
+		return t.content
+	}
+	return nil
 }
 
 type Tokenizer struct {
@@ -137,7 +147,7 @@ func (tokenizer *Tokenizer) getNextToken(line []byte) (*Token, error) {
 		return nil, nil
 	}
 	switch line[tokenizer.currentPos] {
-	case '{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '&', '|', '>', '<', '=':
+	case '{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '&', '|', '>', '<', '=', '~':
 		return tokenizer.tokenSimpleSymbol(line)
 	case '/':
 		return tokenizer.tokenCommentOrDivide(line)
@@ -146,7 +156,7 @@ func (tokenizer *Tokenizer) getNextToken(line []byte) (*Token, error) {
 	case '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return tokenizer.tokenNumber(line)
 	default:
-		return tokenizer.tokenKeywordOrIdentifier(line)
+		return tokenizer.toKeywordOrIdentifier(line)
 	}
 }
 
@@ -164,7 +174,7 @@ func (tokenizer *Tokenizer) trimSpace(line []byte) {
 }
 
 func (tokenizer *Tokenizer) hasRemainCharacters(line []byte) bool {
-	return tokenizer.currentPos < len(line)-1
+	return tokenizer.currentPos < len(line)
 }
 
 func (tokenizer *Tokenizer) tokenSimpleSymbol(line []byte) (*Token, error) {
@@ -267,6 +277,9 @@ func (tokenizer *Tokenizer) tokenNumber(line []byte) (*Token, error) {
 		}
 		break
 	}
+	// It's better to check whether the current is a whiteSpace, \n, //, /*.
+	// But we don't check here. Because the parser, or the syntax of the language
+	// can check this.
 	token := &Token{
 		content:  string(line[startPos:tokenizer.currentPos]),
 		line:     tokenizer.currentLine,
@@ -277,7 +290,7 @@ func (tokenizer *Tokenizer) tokenNumber(line []byte) (*Token, error) {
 	return token, nil
 }
 
-func (tokenizer *Tokenizer) tokenKeywordOrIdentifier(line []byte) (*Token, error) {
+func (tokenizer *Tokenizer) toKeywordOrIdentifier(line []byte) (*Token, error) {
 	// Look forward to find a continuous characters.
 	startPos := tokenizer.currentPos
 	for tokenizer.currentPos < len(line) {
@@ -328,6 +341,8 @@ func (tokenizer *Tokenizer) makeError(near string, line int, msg string) error {
 	return errors.New(fmt.Sprintf("tokenizer error near %s at line %d, msg: %s", near, line, msg))
 }
 
+// Tokenizer accepts a source `rd` and tokenizer it's content according to hack language rules.
+// This method is the main method of this tokenizer.
 func (tokenizer *Tokenizer) Tokenize(rd io.Reader) (tokens []*Token, err error) {
 	bfReader := bufio.NewReader(rd)
 	tokenizer.currentLine = 1
