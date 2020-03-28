@@ -1,10 +1,13 @@
 package compiler
 
+import "io"
+
 // In this file, we defined all ast of hack programming languages according to hack programming language grammar.
 // According to the grammar, each hack language file xxx.hack starts with a class definition, yes, there is no package
 // declaration and dependency declaration.
 
 type ClassAst struct {
+	writer            io.Writer
 	className         string
 	classVariables    []*ClassVariableAst
 	classFuncOrMethod []*ClassFuncOrMethodAst
@@ -14,8 +17,6 @@ type ClassVariableAst struct {
 	VariableNames []string
 	FieldTP       FieldType
 	VariableType  VariableType
-	// Only used when variableType is ClassType
-	ClassName string
 }
 
 type FieldType int
@@ -25,22 +26,29 @@ const (
 	ClassFieldType
 )
 
-type VariableType int
+type VariableType struct {
+	TP   VarType
+	Name string
+}
+
+type VarType int
 
 const (
-	IntVariableType VariableType = iota
+	IntVariableType VarType = iota
 	CharVariableType
 	BooleanVariableType
 	ClassVariableType
+	// Only used on type checking.
+	ArrayType
+	StringType
 )
 
 type ClassFuncOrMethodAst struct {
-	FuncTP          FuncType
-	FuncName        string
-	ReturnTP        ReturnType
-	ReturnClassName string
-	Params          []*FuncParamAst
-	FuncBody        []*StatementAst
+	FuncTP   FuncType
+	FuncName string
+	ReturnTP ReturnType
+	Params   []*FuncParamAst
+	FuncBody []*StatementAst
 }
 
 type FuncType int
@@ -51,10 +59,16 @@ const (
 	ClassFuncType
 )
 
-type ReturnType int
+type ReturnType struct {
+	TP ReturnTP0
+	// Only used for className type
+	Name string
+}
+
+type ReturnTP0 int
 
 const (
-	VoidReturnType ReturnType = iota
+	VoidReturnType ReturnTP0 = iota
 	IntReturnType
 	CharReturnType
 	BooleanReturnType
@@ -62,19 +76,9 @@ const (
 )
 
 type FuncParamAst struct {
-	ParamName      string
-	ParamTP        ParamType
-	ParamClassName string
+	ParamName string
+	ParamTP   VariableType
 }
-
-type ParamType int
-
-const (
-	IntParamType ParamType = iota
-	CharParamType
-	BooleanParamType
-	ClassParamType
-)
 
 type StatementAst struct {
 	StatementTP StatementType
@@ -84,7 +88,7 @@ type StatementAst struct {
 type StatementType int
 
 const (
-	VariableDeclareTP StatementType = iota
+	VariableDeclareStatementTP StatementType = iota
 	LetStatementTP
 	IfStatementTP
 	WhileStatementTP
@@ -105,15 +109,19 @@ type VariableAst struct {
 }
 
 type ExpressionAst struct {
-	LeftExpr  *ExpressionTerm
-	Op        *OpAst
-	RightExpr *ExpressionTerm
+	// Can be ExpressionAst or ExpressionTerm
+	LeftExpr interface{}
+	Op       *OpAst
+	// Can be ExpressionAst or ExpressionTerm
+	RightExpr interface{}
+	TP        *VariableType
 }
 
 type ExpressionTerm struct {
 	UnaryOp *OpAst
 	Type    ExpressionTermType
 	Value   interface{}
+	TP      *VariableType
 }
 
 type ExpressionTermType int
@@ -128,19 +136,24 @@ const (
 	KeyWordConstantFalseTermType
 	KeyWordConstantNullTermType
 	KeyWordConstantThisTermType
-	// For varName, value in expressionTerm is VariableAst
+	// For varName, value in expressionTerm is *VariableAst
+	// In jack, it doesn't support varName.field to retrieve object field.
 	VarNameExpressionTermType
+	// For ArrayIndexExpressionTerm, value is *ExpressionAst
+	// where left is ExpressionTerm, and right is *ExpressionAst
 	ArrayIndexExpressionTermType
-	// For subRoutineCallExpression, value is CallAst
+	// For subRoutineCallExpression, value is *CallAst
 	SubRoutineCallTermType
-	// For (subExpression), value is ExpressionAst
+	// For (subExpression), value is *ExpressionAst
 	SubExpressionTermType
+	// For unaryTermExpression like -expr, the value is *ExpressionAst
 	UnaryTermExpressionTermType
 )
 
 type OpAst struct {
-	OpTP OpType
-	Op   OpCode
+	OpTP     OpType
+	Op       OpCode
+	priority int
 }
 
 type OpType int
@@ -162,6 +175,7 @@ const (
 	LessOpTP
 	GreaterOpTP
 	EqualOpTp
+	ArrayIndexOpTP
 
 	// Unary Op
 	NegationOpTP
@@ -196,7 +210,6 @@ type ReturnStatementAst struct {
 }
 
 type VarDeclareAst struct {
-	VarNames         []string
-	VarType          VariableType
-	VarTypeClassName string
+	VarNames []string
+	VarType  VariableType
 }

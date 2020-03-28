@@ -1,0 +1,13 @@
+class Main {
+
+   function void main() {
+      var Human my;
+      let my = Human.Human(10, "hello");
+      do Output.printInt(my.getAge());
+      do Output.println();
+      do Output.printString(my.getName());
+      do Output.println();
+      return;
+   }
+
+}

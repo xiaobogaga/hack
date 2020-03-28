@@ -24,6 +24,7 @@ func (parser *Parser) Parse(filePath string) (classAsts []*ClassAst, err error) 
 		if !isJackFile(file) {
 			continue
 		}
+		parser.reset()
 		classAst, err := parser.ParseFile(file.Name())
 		if err != nil {
 			return nil, err
@@ -31,6 +32,10 @@ func (parser *Parser) Parse(filePath string) (classAsts []*ClassAst, err error) 
 		classAsts = append(classAsts, classAst)
 	}
 	return
+}
+
+func (parser *Parser) reset() {
+	parser.currentTokenPos, parser.currentTokens = 0, nil
 }
 
 func isJackFile(fileInfo os.FileInfo) bool {
@@ -127,7 +132,7 @@ func (parser *Parser) ParseVariableDeclaration() (vars *ClassVariableAst, err er
 	case StaticTP:
 		fieldTp = ClassFieldType
 	}
-	varType, className, err := parser.ParseVariableType()
+	varType, err := parser.ParseVariableType()
 	if err != nil {
 		return nil, err
 	}
@@ -160,11 +165,10 @@ func (parser *Parser) ParseVariableDeclaration() (vars *ClassVariableAst, err er
 		VariableNames: varNames,
 		FieldTP:       fieldTp,
 		VariableType:  varType,
-		ClassName:     className,
 	}, nil
 }
 
-func (parser *Parser) ParseVariableType() (v VariableType, className string, err error) {
+func (parser *Parser) ParseVariableType() (v VariableType, err error) {
 	if parser.currentTokenPos >= len(parser.currentTokens) {
 		err = parser.makeError()
 		return
@@ -172,14 +176,13 @@ func (parser *Parser) ParseVariableType() (v VariableType, className string, err
 	token := parser.currentTokens[parser.currentTokenPos]
 	switch token.tp {
 	case IntTP:
-		v = IntVariableType
+		v.TP = IntVariableType
 	case CharTP:
-		v = CharVariableType
+		v.TP = CharVariableType
 	case BooleanTP:
-		v = BooleanVariableType
+		v.TP = BooleanVariableType
 	case IdentifierTP:
-		v = ClassVariableType
-		className = token.content
+		v.TP, v.Name = ClassVariableType, token.content
 	default:
 		err = parser.makeError()
 	}
@@ -200,7 +203,7 @@ func (parser *Parser) ParseFuncOrMethodDeclaration() (*ClassFuncOrMethodAst, err
 		return nil, err
 	}
 
-	returnTp, retClassName, err := parser.parseFuncReturnType()
+	returnTp, err := parser.parseFuncReturnType()
 	if err != nil {
 		return nil, err
 	}
@@ -222,12 +225,11 @@ func (parser *Parser) ParseFuncOrMethodDeclaration() (*ClassFuncOrMethodAst, err
 	}
 
 	return &ClassFuncOrMethodAst{
-		FuncTP:          funcTp,
-		FuncName:        methodName,
-		ReturnTP:        returnTp,
-		ReturnClassName: retClassName,
-		Params:          paramList,
-		FuncBody:        methodBody,
+		FuncTP:   funcTp,
+		FuncName: methodName,
+		ReturnTP: returnTp,
+		Params:   paramList,
+		FuncBody: methodBody,
 	}, nil
 }
 
@@ -250,7 +252,7 @@ func (parser *Parser) parseFuncType() (funcTP FuncType, err error) {
 	return
 }
 
-func (parser *Parser) parseFuncReturnType() (retTP ReturnType, retClassName string, err error) {
+func (parser *Parser) parseFuncReturnType() (retTP ReturnType, err error) {
 	if parser.currentTokenPos >= len(parser.currentTokens) {
 		err = parser.makeError()
 		return
@@ -258,16 +260,15 @@ func (parser *Parser) parseFuncReturnType() (retTP ReturnType, retClassName stri
 	token := parser.currentTokens[parser.currentTokenPos]
 	switch token.tp {
 	case VoidTP:
-		retTP = VoidReturnType
+		retTP.TP = VoidReturnType
 	case IntTP:
-		retTP = IntReturnType
+		retTP.TP = IntReturnType
 	case CharTP:
-		retTP = CharReturnType
+		retTP.TP = CharReturnType
 	case BooleanTP:
-		retTP = BooleanReturnType
+		retTP.TP = BooleanReturnType
 	case IdentifierTP:
-		retTP = ClassReturnType
-		retClassName = token.content
+		retTP.TP, retTP.Name = ClassReturnType, token.content
 	default:
 		err = parser.makeError()
 	}
@@ -287,11 +288,11 @@ func (parser *Parser) parseFuncParamList() (ast []*FuncParamAst, err error) {
 	}
 
 	for parser.currentTokenPos < len(parser.currentTokens) {
-		varType, varName, varClassName, err := parser.parseFuncVarTypeName()
+		varType, varName, err := parser.parseFuncVarTypeName()
 		if err != nil {
 			return nil, err
 		}
-		ast = append(ast, &FuncParamAst{ParamTP: varType, ParamName: varName, ParamClassName: varClassName})
+		ast = append(ast, &FuncParamAst{ParamTP: varType, ParamName: varName})
 		_, match = parser.expectToken(CommaTP, false)
 		if match {
 			parser.stepForward()
@@ -305,7 +306,7 @@ func (parser *Parser) parseFuncParamList() (ast []*FuncParamAst, err error) {
 	return
 }
 
-func (parser *Parser) parseFuncVarTypeName() (paramType ParamType, paramName, paramClassName string, err error) {
+func (parser *Parser) parseFuncVarTypeName() (paramType VariableType, paramName string, err error) {
 	if parser.currentTokenPos >= len(parser.currentTokens) {
 		err = parser.makeError()
 		return
@@ -313,14 +314,14 @@ func (parser *Parser) parseFuncVarTypeName() (paramType ParamType, paramName, pa
 	token := parser.currentTokens[parser.currentTokenPos]
 	switch token.tp {
 	case IntTP:
-		paramType = IntParamType
+		paramType.TP = IntVariableType
 	case CharTP:
-		paramType = CharParamType
+		paramType.TP = CharVariableType
 	case BooleanTP:
-		paramType = BooleanParamType
+		paramType.TP = BooleanVariableType
 	case IdentifierTP:
-		paramType = ClassParamType
-		paramClassName = token.content
+		paramType.TP = ClassVariableType
+		paramType.Name = token.content
 	}
 	if parser.currentTokenPos >= len(parser.currentTokens) {
 		err = parser.makeError()
@@ -330,7 +331,6 @@ func (parser *Parser) parseFuncVarTypeName() (paramType ParamType, paramName, pa
 		err = parser.makeError()
 		return
 	}
-	paramClassName = parser.currentTokens[parser.currentTokenPos].content
 	return
 }
 
@@ -408,7 +408,7 @@ func (parser *Parser) parseVarDeclareStatement() (stm *StatementAst, err error) 
 	if !match {
 		return nil, parser.makeError()
 	}
-	varType, varClassName, err := parser.ParseVariableType()
+	varType, err := parser.ParseVariableType()
 	if err != nil {
 		return nil, err
 	}
@@ -438,11 +438,10 @@ func (parser *Parser) parseVarDeclareStatement() (stm *StatementAst, err error) 
 		return nil, parser.makeError()
 	}
 	return &StatementAst{
-		StatementTP: VariableDeclareTP,
+		StatementTP: VariableDeclareStatementTP,
 		Statement: &VarDeclareAst{
-			VarNames:         varNames,
-			VarType:          varType,
-			VarTypeClassName: varClassName,
+			VarNames: varNames,
+			VarType:  varType,
 		},
 	}, nil
 }
@@ -487,31 +486,68 @@ func (parser *Parser) parseExpression() (ast *ExpressionAst, err error) {
 	if err != nil {
 		return nil, err
 	}
-
-	if parser.currentTokenPos >= len(parser.currentTokens) {
-		return nil, parser.makeError()
+	var ops []*OpAst
+	var exprTerms []*ExpressionTerm
+	exprTerms = append(exprTerms, leftExprTerm)
+	for parser.matchOp() {
+		op, err := parser.parseOpAst()
+		if err != nil {
+			return nil, err
+		}
+		exprTerm, err := parser.parseExpressionTerm()
+		if err != nil {
+			return nil, err
+		}
+		ops = append(ops, op)
+		exprTerms = append(exprTerms, exprTerm)
 	}
+	return buildExpressionsTree(ops, exprTerms), nil
+}
 
-	token := parser.currentTokens[parser.currentTokenPos]
-	if token.tp == SemiColonTP {
-		return &ExpressionAst{LeftExpr: leftExprTerm}, nil
+func buildExpressionsTree(ops []*OpAst, exprTerms []*ExpressionTerm) *ExpressionAst {
+	if len(ops) == 0 {
+		return &ExpressionAst{LeftExpr: exprTerms[0],}
 	}
-
-	op, err := parser.parseOpAst()
-	if err != nil {
-		return nil, err
+	if len(ops) == 1 {
+		return &ExpressionAst{LeftExpr: exprTerms[0], Op: ops[0], RightExpr: exprTerms[1],}
 	}
-
-	rightExprTerm, err := parser.parseExpressionTerm()
-	if err != nil {
-		return nil, err
+	expressionStack := make([]interface{}, 0, len(exprTerms))
+	for _, exprTerm := range exprTerms {
+		expressionStack = append(expressionStack, exprTerm)
 	}
+	for i := 2; len(expressionStack) > 2; i = i % len(expressionStack) {
+		nextOp := ops[i-1]
+		lastOp := ops[i-2]
+		if lastOp.priority >= nextOp.priority {
+			// We can merge last two expression to a new expression node.
+			lastLeftExpression, lastRightExpression := expressionStack[i-1], expressionStack[i]
+			newExpr := makeNewExpression(lastLeftExpression, lastRightExpression, lastOp)
+			expressionStack = append(expressionStack[:i], expressionStack[i+1:]...)
+			expressionStack[i-1] = newExpr
+			ops = append(ops[:i-2], ops[i-1:]...)
+			continue
+		}
+		i++
+	}
+	return makeNewExpression(expressionStack[0], expressionStack[1], ops[0])
+}
 
-	return &ExpressionAst{
-		LeftExpr:  leftExprTerm,
-		Op:        op,
-		RightExpr: rightExprTerm,
-	}, nil
+func makeNewExpression(leftExpr interface{}, rightExpr interface{}, op *OpAst) *ExpressionAst {
+	_, leftIsExpressionTerm := leftExpr.(*ExpressionTerm)
+	_, rightIsExpressionTerm := rightExpr.(*ExpressionTerm)
+	ret := new(ExpressionAst)
+	if leftIsExpressionTerm {
+		ret.LeftExpr = leftExpr.(*ExpressionTerm)
+	} else {
+		ret.LeftExpr = leftExpr.(*ExpressionAst)
+	}
+	if rightIsExpressionTerm {
+		ret.RightExpr = rightExpr.(*ExpressionTerm)
+	} else {
+		ret.RightExpr = rightExpr.(*ExpressionAst)
+	}
+	ret.Op = op
+	return ret
 }
 
 func (parser *Parser) parseExpressionTerm() (expr *ExpressionTerm, err error) {
@@ -583,7 +619,11 @@ func (parser *Parser) parseSubRoutineCallExpressionOrVarExpressionTerm() (*Expre
 		if err != nil {
 			return nil, err
 		}
-		expr.Value, expr.Type = exprAst, ArrayIndexExpressionTermType
+		expr.Value, expr.Type = &ExpressionAst{
+			LeftExpr:  &ExpressionTerm{Type: VarNameExpressionTermType, Value: token.content},
+			Op:        &OpAst{OpTP: BinaryOPTP, Op: ArrayIndexOpTP, priority: 3},
+			RightExpr: exprAst,
+		}, ArrayIndexExpressionTermType
 	case DotTP, LeftParentThesesTP:
 		// Should be a funcCall
 		callAst, err := parser.parseFuncCall()
@@ -647,32 +687,58 @@ func (parser *Parser) parseOpAst() (*OpAst, error) {
 	if parser.currentTokenPos >= len(parser.currentTokens) {
 		return nil, parser.makeError()
 	}
+	// Todo: we can use different priority for these.
 	token := parser.currentTokens[parser.currentTokenPos]
 	op := new(OpAst)
 	op.OpTP = BinaryOPTP
 	switch token.tp {
 	case AddTP:
 		op.Op = AddOpTP
+		op.priority = 1
 	case MinusTP:
 		op.Op = MinusOpTP
+		op.priority = 1
 	case MultiplyTP:
 		op.Op = MultipleOpTP
+		op.priority = 1
 	case DivideTP:
 		op.Op = DivideOpTP
+		op.priority = 1
 	case AndTP:
 		op.Op = AndOpTP
+		op.priority = 1
 	case OrTP:
 		op.Op = OrOpTP
+		op.priority = 1
 	case GreaterTP:
 		op.Op = GreaterOpTP
+		op.priority = 1
 	case LessTP:
 		op.Op = LessOpTP
+		op.priority = 1
 	case EqualTP:
 		op.Op = EqualOpTp
+		op.priority = 1
 	default:
 		return nil, parser.makeError()
 	}
+	parser.stepForward()
 	return op, nil
+}
+
+func (parser *Parser) matchOp() bool {
+	if parser.currentTokenPos >= len(parser.currentTokens) {
+		return false
+	}
+	token := parser.currentTokens[parser.currentTokenPos]
+	op := new(OpAst)
+	op.OpTP = BinaryOPTP
+	switch token.tp {
+	case AddTP, MinusTP, MultiplyTP, DivideTP, AndTP, OrTP, GreaterTP, LessTP, EqualTP:
+		return true
+	default:
+		return false
+	}
 }
 
 func (parser *Parser) parseLetVariableAst() (*VariableAst, error) {

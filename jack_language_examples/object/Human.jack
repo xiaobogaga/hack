@@ -1,0 +1,20 @@
+class Human {
+
+   field int age;
+   field String name;
+
+   constructor Human Human(int age1, String name1) {
+      let age = age1;
+      let name = name1;
+      return this;
+   }
+
+   method String getName() {
+      return name;
+   }
+
+   method int getAge() {
+      return age;
+   }
+
+}
