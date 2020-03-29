@@ -1,6 +1,8 @@
 package compiler
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -283,6 +285,76 @@ func TestTokenizer_TokenKeyWordOrIdentifier(t *testing.T) {
 }
 
 func TestTokenizer_ParseLine(t *testing.T) {
-	// Todo
+	testData := []struct {
+		line  string
+		match bool
+	}{
+		{
+			line:  " // hello world /* */",
+			match: true,
+		},
+		{
+			line:  "/* hello 1*/ /* /*",
+			match: false,
+		},
+		{
+			line:  "/* hello /* /*",
+			match: false,
+		},
+		{
+			/* /* hello */
+			line:  "/* /* hello */",
+			match: true,
+		},
+		{
+			/* */ /* /* /* */
+			line:  "/* */ /* /* /* */",
+			match: true,
+		},
+		{
+			// /* */ /* /* /* */ /*
+			line:  "/* */ /* /* /* */ /*",
+			match: false,
+		},
+	}
+	tokenizer := &Tokenizer{}
+	for _, data := range testData {
+		tokenizer.Reset()
+		err, match := tokenizer.parseLine([]byte(data.line))
+		assert.Nil(t, err)
+		assert.Equal(t, data.match, match)
+	}
+}
 
+func TestTokenizer_Tokenize(t *testing.T) {
+	content := []byte(`
+// A simple hello world jack program
+
+/*  
+ ** comment |
+	a main func
+/* /*
+*/
+
+class Main {
+
+	function void main() {
+        var int a;
+        var char c;
+        var String d;
+        let a = 10;
+        let b = c + a;
+		do Output.printString("Hello world");
+		do Output.println();
+		return;
+	}
+
+}
+`)
+	tokenizer := &Tokenizer{}
+	tokens, err := tokenizer.Tokenize(bytes.NewReader(content))
+	assert.Nil(t, err)
+	for _, t := range tokens {
+		fmt.Printf("%+v\n", t)
+	}
 }

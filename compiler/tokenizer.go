@@ -143,7 +143,7 @@ type Tokenizer struct {
 // getNextToken returns the next token from line. where Token is the returned token.
 func (tokenizer *Tokenizer) getNextToken(line []byte) (*Token, error) {
 	tokenizer.trimSpace(line)
-	if tokenizer.hasRemainCharacters(line) {
+	if !tokenizer.hasRemainCharacters(line) {
 		return nil, nil
 	}
 	switch line[tokenizer.currentPos] {
@@ -163,7 +163,8 @@ func (tokenizer *Tokenizer) getNextToken(line []byte) (*Token, error) {
 // trimSpace will step forward through line and skip all continuous space, return the remaining line
 // which must start with a non-space character.
 func (tokenizer *Tokenizer) trimSpace(line []byte) {
-	for _, l := range line {
+	for tokenizer.currentPos < len(line) {
+		l := line[tokenizer.currentPos]
 		if l == ' ' || l == '\n' || l == '	' {
 			tokenizer.currentPos++
 			continue
@@ -345,8 +346,10 @@ func (tokenizer *Tokenizer) makeError(near string, line int, msg string) error {
 // This method is the main method of this tokenizer.
 func (tokenizer *Tokenizer) Tokenize(rd io.Reader) (tokens []*Token, err error) {
 	bfReader := bufio.NewReader(rd)
-	tokenizer.currentLine = 1
+	tokenizer.currentLine = 0
 	for {
+		tokenizer.currentLine++
+		tokenizer.currentPos = 0
 		line, err := bfReader.ReadBytes('\n')
 		if err != nil && err != io.EOF {
 			return nil, err
@@ -354,50 +357,61 @@ func (tokenizer *Tokenizer) Tokenize(rd io.Reader) (tokens []*Token, err error) 
 		if err == io.EOF {
 			return tokenizer.tokens, nil
 		}
-		err = tokenizer.parseLine(bfReader, line)
-		if err != nil {
-			return nil, err
+		for tokenizer.currentPos < len(line) {
+			err, match := tokenizer.parseLine(line)
+			if err != nil {
+				return nil, err
+			}
+			line, err = tokenizer.lookForwardForMatchingMultipleLineComment(bfReader, line, !match)
+			if err != nil {
+				return nil, err
+			}
 		}
-		tokenizer.currentLine++
-		tokenizer.currentPos = 0
 	}
 }
 
-func (tokenizer *Tokenizer) parseLine(rd *bufio.Reader, line []byte) (err error) {
+func (tokenizer *Tokenizer) parseLine(line []byte) (error, bool) {
 	for {
 		token, err := tokenizer.getNextToken(line)
 		if err != nil {
-			return err
+			return err, true
 		}
 		if token == nil {
-			return nil
+			return nil, true
 		}
 		switch token.tp {
 		case MultipleLineOpenCommentTP:
-			line, err = tokenizer.lookForwardForMatchingMultipleLineComment(rd, line)
+			match := tokenizer.lookForwardForMatchingMultipleLineCommentAtCurrentLine(line)
+			if !match {
+				return nil, false
+			}
+			continue
 		case SingleLineCommentTP:
-			return nil
+			return nil, true
 		default:
 			tokenizer.tokens = append(tokenizer.tokens, token)
 		}
 		if err != nil {
-			return err
+			return err, true
 		}
 	}
 }
 
-func (tokenizer *Tokenizer) lookForwardForMatchingMultipleLineComment(bfReader *bufio.Reader, line []byte) ([]byte, error) {
-	multipleCommentTPStack := []TokenType{MultipleLineOpenCommentTP}
+func (tokenizer *Tokenizer) lookForwardForMatchingMultipleLineComment(bfReader *bufio.Reader, line []byte, needFindMatch bool) ([]byte, error) {
+	if !needFindMatch {
+		return line, nil
+	}
+	var err error
 	startLine := tokenizer.currentLine
 	startContent := string(line)
 	for {
-		tokenizer.lookForwardForMatchingMultipleLineCommentAtCurrentLine(multipleCommentTPStack, line)
-		if len(multipleCommentTPStack) == 0 {
+		match := tokenizer.lookForwardForMatchingMultipleLineCommentAtCurrentLine(line)
+		if match {
 			return line, nil
 		}
 		// If cannot find the matching closing multiple line comment at current line.
 		// We skip to next line to find.
-		line, err := bfReader.ReadBytes('\n')
+		line, err = bfReader.ReadBytes('\n')
 		if err != nil && err != io.EOF {
 			return nil, err
 		}
@@ -409,23 +423,24 @@ func (tokenizer *Tokenizer) lookForwardForMatchingMultipleLineComment(bfReader *
 	}
 }
 
-func (tokenizer *Tokenizer) lookForwardForMatchingMultipleLineCommentAtCurrentLine(multipleCommentTPStack []TokenType,
-	line []byte) {
-	for tokenizer.currentPos < len(line) && len(multipleCommentTPStack) > 0 {
+func (tokenizer *Tokenizer) lookForwardForMatchingMultipleLineCommentAtCurrentLine(line []byte) bool {
+	for tokenizer.currentPos < len(line) {
 		// If it's /*
 		if tokenizer.currentPos < len(line)-1 && line[tokenizer.currentPos] == '/' &&
 			line[tokenizer.currentPos+1] == '*' {
-			multipleCommentTPStack = append(multipleCommentTPStack, MultipleLineOpenCommentTP)
+			tokenizer.currentPos += 2
+			continue
 		}
 		// If it's */
 		if tokenizer.currentPos < len(line)-1 && line[tokenizer.currentPos] == '*' &&
 			line[tokenizer.currentPos+1] == '/' {
-			multipleCommentTPStack = multipleCommentTPStack[:len(multipleCommentTPStack)-1]
+			tokenizer.currentPos += 2
+			return true
 		}
 		// Otherwise we look forward.
-		tokenizer.currentPos += 2
+		tokenizer.currentPos++
 	}
-	return
+	return false
 }
 
 func (tokenizer *Tokenizer) Reset() {
