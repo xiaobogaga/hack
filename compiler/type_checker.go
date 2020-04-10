@@ -1,9 +1,12 @@
 package compiler
 
+//******************************************************//
+//     existence checking                               //
+//                          existence checking          //
+//******************************************************//
 func SymbolExistenceChecker(ast []*ClassAst) error {
-	// Todo
 	for _, classAst := range ast {
-		err := symbolExistenceCheckerForSingleClassAst(classAst)
+		err := classAst.existenceCheck()
 		if err != nil {
 			return err
 		}
@@ -16,7 +19,7 @@ func SymbolExistenceChecker(ast []*ClassAst) error {
 // For funcLocalVariables and funcParams, If it's className, check whether the class exists.
 // In statements and expression:
 // * check whether the funcCall, param exists.
-func symbolExistenceCheckerForSingleClassAst(classAst *ClassAst) error {
+func (classAst *ClassAst) existenceCheck() error {
 	err := classAst.checkClassVariablesExistence()
 	if err != nil {
 		return err
@@ -39,14 +42,16 @@ func (classAst *ClassAst) checkClassVariablesExistence() error {
 }
 
 func (classAst *ClassAst) checkClassVariableExistence(ast *ClassVariableAst) error {
-	if ast.VariableType.TP == ClassVariableType || isClassNameExist(ast.VariableType.Name) {
+	// ast.symbolDesc = symbolTable.lookUpClassVar(classAst.className, ast.VariableName)
+	if ast.VariableType.TP != ClassVariableType || symbolTable.isClassNameExist(ast.VariableType.Name) {
 		return nil
 	}
-	return makeSemanticError("class %s cannot find", ast.VariableType.Name)
+	return makeSemanticError("cannot find var %s's class %s", ast.VariableName, ast.VariableType.Name)
 }
 
 func (classAst *ClassAst) checkFuncVariablesExistence() error {
 	for _, ast := range classAst.classFuncOrMethod {
+		// ast.funcSymbol = symbolTable.lookUpFuncInClass(classAst.className, ast.FuncName)
 		err := classAst.checkFuncVariableExistence(ast)
 		if err != nil {
 			return err
@@ -58,22 +63,22 @@ func (classAst *ClassAst) checkFuncVariablesExistence() error {
 func (classAst *ClassAst) checkFuncVariableExistence(ast *ClassFuncOrMethodAst) error {
 	// Check func params
 	for _, funcParam := range ast.Params {
-		if funcParam.ParamTP.TP != ClassVariableType || isClassNameExist(funcParam.ParamTP.Name) {
+		if funcParam.ParamTP.TP != ClassVariableType || symbolTable.isClassNameExist(funcParam.ParamTP.Name) {
 			continue
 		}
-		return makeSemanticError("cannot find %s class name at func %s as it's params",
-			funcParam.ParamTP.Name, ast.FuncName)
+		return makeSemanticError("cannot find variable: %s's type %s at func %s.%s",
+			funcParam.ParamName, funcParam.ParamTP.Name, classAst.className, ast.FuncName)
 	}
 	// Check returnType
-	if ast.ReturnTP.TP == ClassReturnType && !isClassNameExist(ast.ReturnTP.Name) {
-		return makeSemanticError("cannot find %s class name at func %s as it's return type",
-			ast.ReturnTP.Name, ast.FuncName)
+	if ast.ReturnTP.TP == ClassVariableType && !symbolTable.isClassNameExist(ast.ReturnTP.Name) {
+		return makeSemanticError("cannot find %s.%s's return type %s",
+			classAst.className, ast.FuncName, ast.ReturnTP.Name)
 	}
 	// Check func Body.
-	return classAst.checkFunStatementsVariableExistence(ast)
+	return classAst.checkFuncStatementsVariableExistence(ast)
 }
 
-func (classAst *ClassAst) checkFunStatementsVariableExistence(ast *ClassFuncOrMethodAst) error {
+func (classAst *ClassAst) checkFuncStatementsVariableExistence(ast *ClassFuncOrMethodAst) error {
 	i := 0
 	for ; i < len(ast.FuncBody); i++ {
 		if ast.FuncBody[i].StatementTP != VariableDeclareStatementTP {
@@ -89,79 +94,9 @@ func (classAst *ClassAst) checkFunStatementsVariableExistence(ast *ClassFuncOrMe
 
 func (classAst *ClassAst) checkVariableDeclareStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
 	variableDeclareAst := statement.Statement.(*VarDeclareAst)
-	if variableDeclareAst.VarType.TP == ClassVariableType && !isClassNameExist(variableDeclareAst.VarType.Name) {
-		return makeSemanticError("variable %s type class %s doesn't exist at func %s", variableDeclareAst.VarNames,
-			variableDeclareAst.VarType.Name, ast.FuncName)
-	}
-	return nil
-}
-
-func (classAst *ClassAst) checkLetStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
-	letStatement := (statement).Statement.(*LetStatementAst)
-	// Because variable declare statement appears before other statements.
-	// So we can simply check variable existence by using symbolTable.
-	if !classAst.isNameExist(letStatement.LetVariable.VarName, ast.FuncName) {
-		return makeSemanticError("undeclared variable: %s at func: %s", letStatement.LetVariable.VarName,
-			ast.FuncName)
-	}
-	err := classAst.checkVariableExistenceInExpression(ast, letStatement.LetVariable.ArrayIndex)
-	if err != nil {
-		return err
-	}
-	return classAst.checkVariableExistenceInExpression(ast, letStatement.Value)
-}
-
-func (classAst *ClassAst) checkIfStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
-	ifStatement := statement.Statement.(*IfStatementAst)
-	err := classAst.checkVariableExistenceInExpression(ast, ifStatement.Condition)
-	if err != nil {
-		return err
-	}
-	err = classAst.checkStatementsVariableExistence(ast, ifStatement.IfTrueStatements)
-	if err != nil {
-		return err
-	}
-	return classAst.checkStatementsVariableExistence(ast, ifStatement.ElseStatements)
-}
-
-func (classAst *ClassAst) checkWhileStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
-	whileStatement := statement.Statement.(*WhileStatementAst)
-	err := classAst.checkVariableExistenceInExpression(ast, whileStatement.Condition)
-	if err != nil {
-		return err
-	}
-	return classAst.checkStatementsVariableExistence(ast, whileStatement.Statements)
-}
-
-func (classAst *ClassAst) checkDoStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
-	doStatement := statement.Statement.(DoStatementAst)
-	return classAst.checkFuncCallVariableExistence(ast, doStatement.Call)
-}
-
-func (classAst *ClassAst) checkFuncCallVariableExistence(ast *ClassFuncOrMethodAst, call *CallAst) error {
-	fn := classAst.getFuncDefRef(ast, call.FuncName, call.FuncProvider)
-	if fn == nil {
-		if call.FuncProvider != "" {
-			return makeSemanticError("cannot find such name %s.%s", call.FuncProvider,
-				call.FuncName)
-		}
-		return makeSemanticError("cannot find such name: %s", call.FuncName)
-	}
-	// Todo check parameter length match:
-	if len(fn.FuncParamsSymbolDesc) != len(ast.Params) {
-		return makeSemanticError("func %s doesn't match parameter size", len(fn.FuncParamsSymbolDesc))
-	}
-	// Todo: check whether we need to set fn to call.
-	return classAst.checkVariableExistenceInExpressions(ast, call.Params)
-}
-
-func (classAst *ClassAst) checkReturnStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
-	retStatement := statement.Statement.(*ReturnStatementAst)
-	for _, expr := range retStatement.Return {
-		err := classAst.checkVariableExistenceInExpression(ast, expr)
-		if err != nil {
-			return err
-		}
+	if variableDeclareAst.VarType.TP == ClassVariableType && !symbolTable.isClassNameExist(variableDeclareAst.VarType.Name) {
+		return makeSemanticError("cannot find variable %+v 's type %s at %s.%s", variableDeclareAst.VarName,
+			variableDeclareAst.VarType.Name, classAst.className, ast.FuncName)
 	}
 	return nil
 }
@@ -192,8 +127,77 @@ func (classAst *ClassAst) checkStatementVariableExistence(ast *ClassFuncOrMethod
 	return nil
 }
 
-func (classAst *ClassAst) checkVariableExistenceInFunc(ast *ClassFuncOrMethodAst, call *CallAst) error {
-	for _, expr := range call.Params {
+func (classAst *ClassAst) checkLetStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
+	letStatement := (statement).Statement.(*LetStatementAst)
+	// Because variable declare statement appears before other statements.
+	// So we can simply check variable existence by using symbolTable.
+	varSymbol, err := symbolTable.lookUpVarInFunc(classAst.className, ast.FuncName, letStatement.LetVariable.VarName)
+	if err != nil {
+		return err
+	}
+	if varSymbol == nil {
+		return makeSemanticError("cannot find such variable %s at %s.%s", letStatement.LetVariable.VarName, classAst.className, ast.FuncName)
+	}
+	letStatement.LetVariable.symbolDesc = varSymbol
+	err = classAst.checkVariableExistenceInExpression(ast, letStatement.LetVariable.ArrayIndex)
+	if err != nil {
+		return err
+	}
+	return classAst.checkVariableExistenceInExpression(ast, letStatement.Value)
+}
+
+func (classAst *ClassAst) checkIfStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
+	ifStatement := statement.Statement.(*IfStatementAst)
+	err := classAst.checkVariableExistenceInExpression(ast, ifStatement.Condition)
+	if err != nil {
+		return err
+	}
+	err = classAst.checkStatementsVariableExistence(ast, ifStatement.IfTrueStatements)
+	if err != nil {
+		return err
+	}
+	return classAst.checkStatementsVariableExistence(ast, ifStatement.ElseStatements)
+}
+
+func (classAst *ClassAst) checkWhileStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
+	whileStatement := statement.Statement.(*WhileStatementAst)
+	err := classAst.checkVariableExistenceInExpression(ast, whileStatement.Condition)
+	if err != nil {
+		return err
+	}
+	return classAst.checkStatementsVariableExistence(ast, whileStatement.Statements)
+}
+
+func (classAst *ClassAst) checkDoStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
+	doStatement := statement.Statement.(*DoStatementAst)
+	return classAst.checkFuncCallVariableExistence(ast, doStatement.Call)
+}
+
+func (classAst *ClassAst) checkFuncCallVariableExistence(ast *ClassFuncOrMethodAst, call *CallAst) error {
+	fn, err := symbolTable.lookUpFuncInSpecificClassAndFunc(classAst.className, ast.FuncName, call)
+	if err != nil {
+		return err
+	}
+	if fn == nil {
+		if call.FuncProvider != "" {
+			return makeSemanticError("cannot find func %s.%s at class %s.%s", call.FuncProvider,
+				call.FuncName, classAst.className, ast.FuncName)
+		}
+		return makeSemanticError("cannot find func %s at class %s.%s", call.FuncName, classAst.className, ast.FuncName)
+	}
+	if len(fn.FuncParamsSymbolDesc) != len(call.Params) {
+		return makeSemanticError("func call %s.%s doesn't match parameter size", call.FuncProvider, call.FuncName)
+	}
+	call.FuncSymbolTable = fn
+	return classAst.checkVariableExistenceInExpressions(ast, call.Params)
+}
+
+func (classAst *ClassAst) checkReturnStatementVariableExistence(ast *ClassFuncOrMethodAst, statement *StatementAst) error {
+	if statement.Statement == nil {
+		return nil
+	}
+	retStatement := statement.Statement.(*ReturnStatementAst)
+	for _, expr := range retStatement.Return {
 		err := classAst.checkVariableExistenceInExpression(ast, expr)
 		if err != nil {
 			return err
@@ -203,57 +207,69 @@ func (classAst *ClassAst) checkVariableExistenceInFunc(ast *ClassFuncOrMethodAst
 }
 
 func (classAst *ClassAst) checkVariableExistenceInExpression(ast *ClassFuncOrMethodAst, expr *ExpressionAst) error {
-	_, isLeftExprExpressionTerm := expr.LeftExpr.(*ExpressionTerm)
+	if expr == nil {
+		return nil
+	}
 	var err error
-	if isLeftExprExpressionTerm {
-		err = classAst.checkVariableExistenceInExpressionTerm(ast, expr.LeftExpr.(*ExpressionTerm))
-	} else {
-		err = classAst.checkVariableExistenceInExpression(ast, expr.LeftExpr.(*ExpressionAst))
+	if expr.LeftExpr != nil {
+		_, isLeftExprExpressionTerm := expr.LeftExpr.(*ExpressionTerm)
+		if isLeftExprExpressionTerm {
+			err = classAst.checkVariableExistenceInExpressionTerm(ast, expr.LeftExpr.(*ExpressionTerm))
+		} else {
+			err = classAst.checkVariableExistenceInExpression(ast, expr.LeftExpr.(*ExpressionAst))
+		}
 	}
 	if err != nil {
 		return err
 	}
-	_, isRightExprExpressionTerm := expr.RightExpr.(*ExpressionTerm)
-	if isRightExprExpressionTerm {
-		err = classAst.checkVariableExistenceInExpressionTerm(ast, expr.RightExpr.(*ExpressionTerm))
-	} else {
-		err = classAst.checkVariableExistenceInExpression(ast, expr.RightExpr.(*ExpressionAst))
+	if expr.RightExpr != nil {
+		_, isRightExprExpressionTerm := expr.RightExpr.(*ExpressionTerm)
+		if isRightExprExpressionTerm {
+			err = classAst.checkVariableExistenceInExpressionTerm(ast, expr.RightExpr.(*ExpressionTerm))
+		} else {
+			err = classAst.checkVariableExistenceInExpression(ast, expr.RightExpr.(*ExpressionAst))
+		}
 	}
 	return err
 }
 
 func (classAst *ClassAst) checkVariableExistenceInExpressionTerm(ast *ClassFuncOrMethodAst, exprTerm *ExpressionTerm) error {
+	if exprTerm == nil {
+		return nil
+	}
 	switch exprTerm.Type {
-	case IntegerConstantTermType, StringConstantTermType, KeyWordConstantFalseTermType, KeyWordConstantTrueTermType, KeyWordConstantNullTermType:
+	case IntegerConstantTermType, StringConstantTermType, KeyWordConstantFalseTermType, KeyWordConstantTrueTermType, KeyWordConstantNullTermType, CharacterConstantTermType:
 		return nil
 	case KeyWordConstantThisTermType:
 		// If this method is unction, return err.
 		if ast.FuncTP != ClassFuncType {
 			return nil
 		}
-		return makeSemanticError("cannot use this in functions")
+		return makeSemanticError("cannot use this in static function %s.%s", classAst.className, ast.FuncName)
 	case VarNameExpressionTermType:
-		return classAst.checkVarExpressionExistence(ast, exprTerm.Value.(*VariableAst))
+		symbol, err := symbolTable.lookUpVarInFunc(classAst.className, ast.FuncName, exprTerm.Value.(string))
+		if err != nil {
+			return err
+		}
+		if symbol == nil {
+			return makeSemanticError("cannot find variable %s in %s.%s", exprTerm.Value.(string), classAst.className, ast.FuncName)
+		}
 	case ArrayIndexExpressionTermType:
 		varName := exprTerm.Value.(*ExpressionAst).LeftExpr.(*ExpressionTerm).Value.(string)
-		if !classAst.isNameExist(varName, ast.FuncName) {
-			return makeSemanticError("cannot find variable %s in func %s", varName, ast.FuncName)
+		varSymbol, err := symbolTable.lookUpVarInFunc(classAst.className, ast.FuncName, varName)
+		if err != nil {
+			return err
+		}
+		if varSymbol == nil {
+			return makeSemanticError("cannot find variable %s in %s.%s", exprTerm.Value.(*ExpressionAst).LeftExpr.(*ExpressionTerm).Value.(string), classAst.className, ast.FuncName)
 		}
 		return classAst.checkVariableExistenceInExpression(ast, exprTerm.Value.(*ExpressionAst).RightExpr.(*ExpressionAst))
 	case SubRoutineCallTermType:
-		callAst := exprTerm.Value.(*CallAst)
-		fn := classAst.getFuncDefRef(ast, callAst.FuncName, callAst.FuncProvider)
-		if fn == nil {
-			return makeSemanticError("cannot find such func: %s.%s", callAst.FuncProvider, callAst.FuncName)
-		}
-		if len(fn.FuncParamsSymbolDesc) != len(callAst.Params) {
-			return makeSemanticError("func %s.%s call params doesn't match", callAst.FuncProvider, callAst.FuncName)
-		}
-		return classAst.checkVariableExistenceInExpressions(ast, callAst.Params)
+		return classAst.checkFuncCallVariableExistence(ast, exprTerm.Value.(*CallAst))
 	case SubExpressionTermType:
 		return classAst.checkVariableExistenceInExpression(ast, exprTerm.Value.(*ExpressionAst))
 	case UnaryTermExpressionTermType:
-		return classAst.checkVariableExistenceInExpression(ast, exprTerm.Value.(*ExpressionAst))
+		return classAst.checkVariableExistenceInExpressionTerm(ast, exprTerm.Value.(*ExpressionTerm))
 	}
 	return nil
 }
@@ -269,87 +285,24 @@ func (classAst *ClassAst) checkVariableExistenceInExpressions(ast *ClassFuncOrMe
 }
 
 func (classAst *ClassAst) checkVarExpressionExistence(ast *ClassFuncOrMethodAst, variable *VariableAst) error {
-	classSymbols := symbolTable[classAst.className]
-	if classSymbols.VariablesSymbolTable[variable.VarName] == nil &&
-		classSymbols.FuncSymbolTable[ast.FuncName].FuncParamsSymbolDescMap[variable.VarName] == nil &&
-		classSymbols.FuncSymbolTable[ast.FuncName].FuncLocalVariableDesc[variable.VarName] == nil {
-		return makeSemanticError("cannot find %s variable in %s func", variable.VarName, ast.FuncName)
+	varSymbol, err := symbolTable.lookUpVarInFunc(classAst.className, ast.FuncName, variable.VarName)
+	if err != nil {
+		return err
 	}
+	if varSymbol == nil {
+		return makeSemanticError("cannot find such variable %s at %s.%s", variable.VarName, classAst.className, ast.FuncName)
+	}
+	variable.symbolDesc = varSymbol
 	return classAst.checkVariableExistenceInExpression(ast, variable.ArrayIndex)
 }
 
-func isClassNameExist(className string) bool {
-	_, ok := symbolTable[className]
-	return ok
-}
-
-func (classAst *ClassAst) isNameExist(name string, funcName string) bool {
-	funcSymbols, ok := symbolTable[classAst.className].FuncSymbolTable[funcName]
-	if !ok {
-		return false
-	}
-	return funcSymbols.FuncParamsSymbolDescMap[name] == nil ||
-		funcSymbols.FuncLocalVariableDesc[name] == nil
-}
-
-// In java, there are many restrictions in static or constructor method. For example,
-// In static method, cannot use this, class non-static variables.
-// In jack language:
-func (classAst *ClassAst) getFuncDefRef(methodAst *ClassFuncOrMethodAst, funcName string, funcProvider string) *SymbolsInFunc {
-	// Cannot use this in
-	if (methodAst.FuncTP == ClassConstructorType || methodAst.FuncTP == ClassFuncType) && (funcProvider == "" || funcProvider == "this") {
-		println("cannot use this or method call in constructor or func")
-		return nil
-	}
-	if funcProvider == "" || funcProvider == "this" {
-		// Try search function in current class.
-		return symbolTable.lookUpFuncInClass(classAst.className, funcName)
-	}
-	// funcProvider maybe a variable name.
-	ret, foundSuchVariable := classAst.getFuncDefRefByVariableOrClassName(methodAst, funcName, funcProvider)
-	if foundSuchVariable {
-		return ret
-	}
-	// If not, it should be a className
-	_, ok := symbolTable[funcProvider]
-	if !ok {
-		return nil
-	}
-	return symbolTable[funcProvider].FuncSymbolTable[funcName]
-}
-
-func (classAst *ClassAst) getFuncDefRefByVariableOrClassName(methodAst *ClassFuncOrMethodAst, funcName string,
-	varNameOrClassName string) (symbols *SymbolsInFunc, foundVariableButNotSuchFunc bool) {
-	ret := symbolTable.lookUpVarInFunc(classAst.className, methodAst.FuncName, varNameOrClassName)
-	if ret == nil {
-		return classAst.getFuncDefRefFromByClassName(methodAst, funcName, varNameOrClassName)
-	}
-	if ret.variableType.TP != ClassVariableType || ret.name == "null" {
-		return nil, true
-	}
-	funcs, ok := symbolTable[ret.variableType.Name]
-	if !ok {
-		return nil, true
-	}
-	return funcs.FuncSymbolTable[funcName], true
-}
-
-func (classAst *ClassAst) getFuncDefRefFromByClassName(methodAst *ClassFuncOrMethodAst, funcName string,
-	className string) (symbols *SymbolsInFunc, foundVariableButNotSuchFunc bool) {
-	classSymbol := symbolTable.lookUpClass(className)
-	if classSymbol == nil {
-		return nil, false
-	}
-	funcSymbol, ok := classSymbol.FuncSymbolTable[funcName]
-	if !ok {
-		return nil, true
-	}
-	return funcSymbol, false
-}
-
+//********************************************************************************//
+//                     type                      type                             //
+//                               checking                        checking         //
+//********************************************************************************//
 func typeChecker(ast []*ClassAst) error {
 	for _, classAst := range ast {
-		err := classAst.typeCheckerSingleClassAst()
+		err := classAst.typeChecker0()
 		if err != nil {
 			return err
 		}
@@ -361,7 +314,7 @@ func typeChecker(ast []*ClassAst) error {
 // There are five different statements:
 // * Let statement
 // * If statement
-func (classAst *ClassAst) typeCheckerSingleClassAst() error {
+func (classAst *ClassAst) typeChecker0() error {
 	for _, ast := range classAst.classFuncOrMethod {
 		err := classAst.typeCheckMethod(ast)
 		if err != nil {
@@ -389,7 +342,7 @@ func (classAst *ClassAst) typeCheckStatements(methodAst *ClassFuncOrMethodAst, s
 		case DoStatementTP:
 			err = classAst.typeCheckDoStatement(methodAst, stm.Statement.(*DoStatementAst))
 		case ReturnStatementTP:
-			err = classAst.typeCheckReturnStatement(methodAst, stm.Statement.(*ReturnStatementAst))
+			err = classAst.typeCheckReturnStatement(methodAst, stm)
 		}
 		if err != nil {
 			return err
@@ -399,10 +352,7 @@ func (classAst *ClassAst) typeCheckStatements(methodAst *ClassFuncOrMethodAst, s
 }
 
 func (classAst *ClassAst) typeCheckLetStatement(methodAst *ClassFuncOrMethodAst, ast *LetStatementAst) error {
-	l, err := classAst.getVariableAstType(methodAst, ast.LetVariable)
-	if err != nil {
-		return err
-	}
+	l := &ast.LetVariable.symbolDesc.variableType
 	r, err := classAst.getAndCheckExpressionType(methodAst, ast.Value)
 	if err != nil {
 		return err
@@ -410,7 +360,7 @@ func (classAst *ClassAst) typeCheckLetStatement(methodAst *ClassFuncOrMethodAst,
 	if classAst.checkMatch1(l, r) {
 		return nil
 	}
-	return makeSemanticError("expected %+v but real %+v", l, r)
+	return makeSemanticError("expected %+v but %+v at %s.%s", l, r, classAst.className, methodAst.FuncName)
 }
 
 func (classAst *ClassAst) typeCheckIfStatement(methodAst *ClassFuncOrMethodAst, ast *IfStatementAst) error {
@@ -419,7 +369,7 @@ func (classAst *ClassAst) typeCheckIfStatement(methodAst *ClassFuncOrMethodAst, 
 		return err
 	}
 	if !classAst.checkMatch1(&VariableType{TP: BooleanVariableType,}, t) {
-		return makeSemanticError("expected %+v but real %+v", "bool", t)
+		return makeSemanticError("expected %s but %+v at %s.%s", "bool", t, classAst.className, methodAst.FuncName)
 	}
 	err = classAst.typeCheckStatements(methodAst, ast.IfTrueStatements)
 	if err != nil {
@@ -434,17 +384,13 @@ func (classAst *ClassAst) typeCheckWhileStatement(methodAst *ClassFuncOrMethodAs
 		return err
 	}
 	if !classAst.checkMatch1(&VariableType{TP: BooleanVariableType,}, t) {
-		return makeSemanticError("expected %+v but real %+v", "bool", t)
+		return makeSemanticError("expected %s but %+v at %s.%s", "bool", t, classAst.className, methodAst.FuncName)
 	}
 	return classAst.typeCheckStatements(methodAst, ast.Statements)
 }
 
 func (classAst *ClassAst) typeCheckDoStatement(methodAst *ClassFuncOrMethodAst, ast *DoStatementAst) error {
-	funcSymbolDesc := classAst.getFuncDefRef(methodAst, ast.Call.FuncName, ast.Call.FuncProvider)
-	if len(funcSymbolDesc.FuncParamsSymbolDesc) != len(ast.Call.Params) {
-		return makeSemanticError("func %s.%s expected %d arguments but real %d arguments", ast.Call.FuncProvider,
-			ast.Call.FuncName, len(funcSymbolDesc.FuncParamsSymbolDesc), len(ast.Call.Params))
-	}
+	funcSymbolDesc := ast.Call.FuncSymbolTable
 	for i, expr := range ast.Call.Params {
 		realType, err := classAst.getAndCheckExpressionType(methodAst, expr)
 		if err != nil {
@@ -452,21 +398,24 @@ func (classAst *ClassAst) typeCheckDoStatement(methodAst *ClassFuncOrMethodAst, 
 		}
 		expectType := funcSymbolDesc.FuncParamsSymbolDesc[i].variableType
 		if !classAst.checkMatch1(&expectType, realType) {
-			return makeSemanticError("expected %+v type but real %+v type at func %s.%s %d-th param", expectType,
-				realType, ast.Call.FuncProvider, ast.Call.FuncName, i)
+			return makeSemanticError("expected %+v but %+v at %s.%s %d-th param at %s.%s", expectType,
+				realType, ast.Call.FuncProvider, ast.Call.FuncName, i, classAst.className, methodAst.FuncName)
 		}
 	}
 	return nil
 }
 
-func (classAst *ClassAst) typeCheckReturnStatement(methodAst *ClassFuncOrMethodAst, ast *ReturnStatementAst) error {
-	returnTP, err := classAst.getAndCheckExpressionType(methodAst, ast.Return[0])
+func (classAst *ClassAst) typeCheckReturnStatement(methodAst *ClassFuncOrMethodAst, ast *StatementAst) (err error) {
+	var returnTP *VariableType
+	if ast.Statement != nil {
+		returnTP, err = classAst.getAndCheckExpressionType(methodAst, ast.Statement.(*ReturnStatementAst).Return[0])
+	}
 	if err != nil {
 		return err
 	}
-	if !classAst.checkMatch2(methodAst.ReturnTP, returnTP) {
-		return makeSemanticError("func %s return type doesn't match, expected: %+v but real: %+v",
-			methodAst.FuncName, methodAst.ReturnTP, returnTP)
+	if !classAst.checkMatch1(&methodAst.ReturnTP, returnTP) {
+		return makeSemanticError("func %s.%s return type doesn't match, expected: %+v but: %+v",
+			classAst.className, methodAst.FuncName, methodAst.ReturnTP, returnTP)
 	}
 	return nil
 }
@@ -478,11 +427,14 @@ func (classAst *ClassAst) getAndCheckExpressionType(methodAst *ClassFuncOrMethod
 	if err != nil {
 		return nil, err
 	}
+	if expr.RightExpr == nil {
+		return leftT, nil
+	}
 	rightT, err := classAst.getAndCheckExpressionType0(methodAst, expr.RightExpr)
 	if err != nil {
 		return nil, err
 	}
-	tp, err := classAst.checkMatch0(leftT, rightT, expr.Op)
+	tp, err := classAst.checkMatch0(methodAst, leftT, rightT, expr.Op)
 	expr.TP = tp
 	return tp, err
 }
@@ -496,8 +448,10 @@ func (classAst *ClassAst) getAndCheckExpressionType0(methodAst *ClassFuncOrMetho
 	switch exprTerm.Type {
 	case IntegerConstantTermType:
 		exprTerm.TP = &VariableType{TP: IntVariableType}
+	case CharacterConstantTermType:
+		exprTerm.TP = &VariableType{TP: CharVariableType}
 	case StringConstantTermType:
-		exprTerm.TP = &VariableType{TP: StringType}
+		exprTerm.TP = &VariableType{TP: ClassVariableType, Name: "String"}
 	case KeyWordConstantTrueTermType, KeyWordConstantFalseTermType:
 		exprTerm.TP = &VariableType{TP: BooleanVariableType}
 	case KeyWordConstantThisTermType:
@@ -506,64 +460,72 @@ func (classAst *ClassAst) getAndCheckExpressionType0(methodAst *ClassFuncOrMetho
 		exprTerm.TP = &VariableType{TP: ClassVariableType, Name: "null"}
 	case VarNameExpressionTermType:
 		exprTerm.TP = classAst.getVariableType(methodAst, exprTerm.Value.(string))
-	case ArrayIndexExpressionTermType, SubExpressionTermType, UnaryTermExpressionTermType:
+	case UnaryTermExpressionTermType:
+		t, err = classAst.getAndCheckExpressionType0(methodAst, exprTerm.Value)
+		if err != nil {
+			return nil, err
+		}
+		exprTerm.TP = t
+	case SubExpressionTermType:
+		t, err = classAst.getAndCheckExpressionType(methodAst, exprTerm.Value.(*ExpressionAst))
+		if err != nil {
+			return nil, err
+		}
+		exprTerm.TP = t
+	case ArrayIndexExpressionTermType:
 		t, err = classAst.getAndCheckExpressionType(methodAst, exprTerm.Value.(*ExpressionAst))
 		if err != nil {
 			return nil, err
 		}
 		exprTerm.TP = t
 	case SubRoutineCallTermType:
-		funDef := classAst.getFuncDefRef(methodAst, exprTerm.Value.(*CallAst).FuncName, exprTerm.Value.(*CallAst).FuncProvider)
-		exprTerm.TP = &funDef.FuncReturnSymbolDesc.variableType
+		exprTerm.TP = &exprTerm.Value.(*CallAst).FuncSymbolTable.FuncReturnSymbolDesc.variableType
 	}
-	err = classAst.checkTypeOnUnaryOp(t, exprTerm.UnaryOp)
+	err = classAst.checkTypeMatchOnUnaryOp(methodAst, t, exprTerm.UnaryOp)
 	if err != nil {
 		return nil, err
 	}
-	return t, nil
+	return exprTerm.TP, nil
 }
 
 func (classAst *ClassAst) getVariableType(methodAst *ClassFuncOrMethodAst, varName string) *VariableType {
 	// Find variable type on class variable first.
-	classSymbolTable := symbolTable[classAst.className]
-	varDesc, ok := classSymbolTable.VariablesSymbolTable[varName]
-	if ok {
-		return &varDesc.variableType
-	}
-	symbolsInFunc, _ := classSymbolTable.FuncSymbolTable[methodAst.FuncName]
-	varDesc, ok = symbolsInFunc.FuncParamsSymbolDescMap[varName]
-	if ok {
-		return &varDesc.variableType
-	}
-	return &symbolsInFunc.FuncLocalVariableDesc[varName].variableType
+	varSymbol, _ := symbolTable.lookUpVarInFunc(classAst.className, methodAst.FuncName, varName)
+	return &varSymbol.variableType
 }
 
-func (classAst *ClassAst) getVariableAstType(methodAst *ClassFuncOrMethodAst, varAst *VariableAst) (*VariableType, error) {
-	// First get variable type
-	varType := classAst.getVariableType(methodAst, varAst.VarName)
-	if varAst.ArrayIndex != nil && varType.Name != "Array" {
-		return nil, makeSemanticError("var %s is not array", varAst.VarName)
-	}
-	return varType, nil
-}
-
-func (classAst *ClassAst) checkMatch0(l, r *VariableType, op *OpAst) (*VariableType, error) {
+func (classAst *ClassAst) checkMatch0(methodAst *ClassFuncOrMethodAst, l, r *VariableType, op *OpAst) (*VariableType, error) {
 	if op.Op == AndOpTP || op.Op == OrOpTP {
-		return l, checkBooleanMatch(l, r)
+		return l, classAst.checkBooleanMatch(methodAst, l, r)
+	}
+	if op.Op == EqualOpTp {
+		return &VariableType{TP: BooleanVariableType}, classAst.checkEqualOpMatch(methodAst, l, r)
 	}
 	if op.Op == ArrayIndexOpTP {
-		if l.TP != ClassVariableType || l.Name != "Array" {
-			return nil, makeSemanticError("l: %+v doesn't support index", l)
+		if l.TP != ClassVariableType {
+			return nil, makeSemanticError("type %+v doesn't support index at %s.%s", l, classAst.className, methodAst.FuncName)
 		}
-		if r.TP != CharVariableType || r.TP != IntVariableType {
-			return nil, makeSemanticError("unsupported %+v type as array index", r)
+		if isIntegerCompatibleType(r) {
+			return nil, makeSemanticError("type %+v doesn't support array index at %s.%s", r, classAst.className, methodAst.FuncName)
 		}
-		return &VariableType{TP: ClassVariableType, Name: "",}, nil
+		// Todo: what type should I return here.
+		return &VariableType{TP: IntVariableType,}, nil
 	}
 	// Otherwise l and r should be both a integer compatible type
-	if l.TP != IntVariableType || l.TP != CharVariableType || r.TP != IntVariableType || r.TP != CharVariableType {
-		return nil, makeSemanticError("unmatched type: l: %+v, r: %+v, op: %+v", l, r, op)
+	if !isIntegerCompatibleType(l) || !isIntegerCompatibleType(r) {
+		return nil, makeSemanticError("unmatched type: l: %+v, r: %+v, op: %+v at %s.%s", l, r, op, classAst.className, methodAst.FuncName)
 	}
+	if isComparatorOpType(op) {
+		return &VariableType{TP: BooleanVariableType}, nil
+	}
+	// We return the ClassVariableType
+	if l.TP == ClassVariableType {
+		return l, nil
+	}
+	if r.TP == ClassVariableType {
+		return r, nil
+	}
+	// Then we consider return IntVariableType
 	if l.TP == IntVariableType {
 		return l, nil
 	}
@@ -573,14 +535,39 @@ func (classAst *ClassAst) checkMatch0(l, r *VariableType, op *OpAst) (*VariableT
 	return l, nil
 }
 
-func checkBooleanMatch(l, r *VariableType) error {
+func isIntegerCompatibleType(l *VariableType) bool {
+	return l.TP == IntVariableType || l.TP == CharVariableType || l.TP == ClassVariableType
+}
+
+func isComparatorOpType(op *OpAst) bool {
+	return op.Op == GreaterOpTP || op.Op == LessOpTP || op.Op == EqualOpTp
+}
+
+func (classAst *ClassAst) checkBooleanMatch(methodAst *ClassFuncOrMethodAst, l, r *VariableType) error {
 	if l.TP == BooleanVariableType && r.TP == BooleanVariableType {
 		return nil
 	}
-	return makeSemanticError("unmatched type l: %+v, r: %+v", l, r)
+	return makeSemanticError("unmatched boolean type l: %+v, r: %+v", l, r)
+}
+
+func (classAst *ClassAst) checkEqualOpMatch(methodAst *ClassFuncOrMethodAst, l, r *VariableType) error {
+	if isIntegerCompatibleType(l) && isIntegerCompatibleType(r) {
+		// If they are both class types. They must be the same class type.
+		if l.TP == ClassVariableType && r.TP == ClassVariableType && l.Name != r.Name && (l.Name != "null" && r.Name != "null") {
+			return makeSemanticError("unmatched type l: %s, r: %s, op: = at %s.%s", l, r, classAst.className, methodAst.FuncName)
+		}
+		return nil
+	}
+	if l.TP != r.TP {
+		return makeSemanticError("unmatched type l: %s, r: %s, op: = at %s.%s", l, r, classAst.className, methodAst.FuncName)
+	}
+	return nil
 }
 
 func (classAst *ClassAst) checkMatch1(expected, real *VariableType) bool {
+	if expected.TP == VoidVariableType {
+		return real == nil || real.TP == VoidVariableType
+	}
 	if real == nil {
 		return false
 	}
@@ -590,63 +577,54 @@ func (classAst *ClassAst) checkMatch1(expected, real *VariableType) bool {
 	case CharVariableType:
 		return real.TP == CharVariableType || real.TP == IntVariableType
 	case IntVariableType:
-		return real.TP == IntVariableType
-	case StringType:
-		return real.TP == StringType || (real.TP == ClassVariableType && (real.Name == "String" || real.Name == "null"))
+		return real.TP == IntVariableType || real.TP == CharVariableType
 	case ClassVariableType:
-		if expected.Name == "String" {
-			return real.TP == ClassVariableType && (real.Name == "String" || real.Name == "null")
+		if expected.Name == "Array" || real.Name == "Array" {
+			return classAst.checkArrayTypeMatch(expected, real)
 		}
-		if expected.Name == "Array" {
-			return real.TP == ClassVariableType && (real.Name == "Array" || real.Name == "null")
+		if real.TP == IntVariableType || (real.TP == ClassVariableType && (real.Name == expected.Name || real.Name == "null")) {
+			return true
 		}
-		return expected.Name == real.Name
-	case ArrayType:
-		return real.TP == ClassVariableType && real.Name == "Array"
+		if real.TP == ClassVariableType && real.Name == expected.Name {
+			return true
+		}
+		// For Object array and array can be transformed to each other.
 	}
 	return false
 }
 
-func (classAst *ClassAst) checkMatch2(expected ReturnType, real *VariableType) bool {
-	if expected.TP == VoidReturnType {
-		return real == nil
+func (classAst *ClassAst) checkArrayTypeMatch(expected *VariableType, real *VariableType) bool {
+	// object can be transformed to array.
+	if expected.Name == "Array" {
+		return real.TP == ClassVariableType
 	}
-	if real == nil {
-		return false
-	}
-	switch expected.TP {
-	case BooleanReturnType:
-		return real.TP == BooleanVariableType
-	case CharReturnType:
-		return real.TP == CharVariableType || real.TP == IntVariableType
-	case IntReturnType:
-		return real.TP == IntVariableType
-	case ClassReturnType:
-		return real.TP == ClassVariableType && (real.Name == "null" || real.Name == expected.Name)
-	}
-	return false
+	return real.Name == "Array"
 }
 
-func (classAst *ClassAst) checkTypeOnUnaryOp(t *VariableType, op *OpAst) error {
+func (classAst *ClassAst) checkTypeMatchOnUnaryOp(methodAst *ClassFuncOrMethodAst, t *VariableType, op *OpAst) error {
 	if op == nil {
 		return nil
 	}
 	switch op.Op {
 	case NegationOpTP:
 		if t.TP != IntVariableType && t.TP != CharVariableType {
-			return makeSemanticError("unsupported %+v type on negative", t)
+			return makeSemanticError("type %+v doesn't support - at %s.%s", t, classAst.className, methodAst.FuncName)
 		}
 	case BooleanNegationOpTP:
 		if t.TP != BooleanVariableType {
-			return makeSemanticError("unsupported %+v type on boolean negative", t)
+			return makeSemanticError("type %+v doesn't support ~ at %s.%s", t, classAst.className, methodAst.FuncName)
 		}
 	}
 	return nil
 }
 
+//********************************************************************************//
+//                     return                      return                         //
+//                               analysis                        analysis         //
+//********************************************************************************//
 func methodReturnAnalysisOnClasses(asts []*ClassAst) error {
 	for _, ast := range asts {
-		err := ast.methodReturnAnalysisOnClass()
+		err := ast.methodReturnAnalysis()
 		if err != nil {
 			return err
 		}
@@ -654,9 +632,9 @@ func methodReturnAnalysisOnClasses(asts []*ClassAst) error {
 	return nil
 }
 
-func (classAst *ClassAst) methodReturnAnalysisOnClass() error {
+func (classAst *ClassAst) methodReturnAnalysis() error {
 	for _, method := range classAst.classFuncOrMethod {
-		err := classAst.methodReturnAnalysis(method)
+		err := classAst.methodReturnAnalysis0(method)
 		if err != nil {
 			return err
 		}
@@ -665,13 +643,13 @@ func (classAst *ClassAst) methodReturnAnalysisOnClass() error {
 }
 
 // Check those func who have return a non-void return type, should as least have a return.
-func (classAst *ClassAst) methodReturnAnalysis(method *ClassFuncOrMethodAst) error {
+func (classAst *ClassAst) methodReturnAnalysis0(method *ClassFuncOrMethodAst) error {
 	hasReturn, err := classAst.statementReturnAnalysis(method, method.FuncBody)
 	if err != nil {
 		return err
 	}
-	if !hasReturn && method.ReturnTP.TP != VoidReturnType {
-		return makeSemanticError("method %s doens't have return", method.FuncName)
+	if !hasReturn {
+		return makeSemanticError("method %s.%s doesn't return", classAst.className, method.FuncName)
 	}
 	return nil
 }
@@ -687,6 +665,30 @@ func (classAst *ClassAst) ifElseReturnAnalysis(method *ClassFuncOrMethodAst, ifA
 
 // statementReturnAnalysis check whether those statements have a valid return semantics: at most one valid return
 // on a valid path.
+// How: Observing that what we only need to verify if-else clause. So we can abstract the program as following:
+// func fName() {
+//    if condition {
+//    }
+//    return // must can return
+//    do print() // unreachable code.
+// }
+// * If we meet a return statement, then we say this function can return.
+// * If doesn't have any return statement, we check whether there are full-returned-if-else.
+// what's called full-returned-if-else, this is an example:
+// func fName() {
+//	if {
+//    return
+//  }
+// }
+// Or
+// func fName() {
+//	if {
+//    return
+//  } else {
+//    return
+//  }
+// }
+//
 func (classAst *ClassAst) statementReturnAnalysis(method *ClassFuncOrMethodAst, statements []*StatementAst) (bool, error) {
 	i, hasReturn := 0, false
 	for ; i < len(statements); i++ {
@@ -711,7 +713,7 @@ Exit:
 		return false, nil
 	}
 	if hasReturn && i < len(method.FuncBody) {
-		return true, makeSemanticError("unreachable code")
+		return true, makeSemanticError("unreachable code at %s.%s", classAst.className, method.FuncName)
 	}
 	return true, nil
 }

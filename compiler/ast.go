@@ -1,6 +1,8 @@
 package compiler
 
-import "io"
+import (
+	"io"
+)
 
 // In this file, we defined all ast of hack programming languages according to hack programming language grammar.
 // According to the grammar, each hack language file xxx.hack starts with a class definition, yes, there is no package
@@ -11,12 +13,16 @@ type ClassAst struct {
 	className         string
 	classVariables    []*ClassVariableAst
 	classFuncOrMethod []*ClassFuncOrMethodAst
+
+	classSymbolTable *ClassSymbolTable // We set symbolTable reference here.
 }
 
 type ClassVariableAst struct {
-	VariableNames []string
-	FieldTP       FieldType
-	VariableType  VariableType
+	VariableName string
+	FieldTP      FieldType
+	VariableType VariableType
+
+	symbolDesc *SymbolDesc // We set symbolTable reference here.
 }
 
 type FieldType int
@@ -31,24 +37,40 @@ type VariableType struct {
 	Name string
 }
 
+func (t VariableType) String() string {
+	switch t.TP {
+	case VoidVariableType:
+		return "void"
+	case IntVariableType:
+		return "int"
+	case CharVariableType:
+		return "char"
+	case BooleanVariableType:
+		return "boolean"
+	case ClassVariableType:
+		return "class: " + t.Name
+	}
+	return ""
+}
+
 type VarType int
 
 const (
-	IntVariableType VarType = iota
+	VoidVariableType VarType = iota // This only be used for method.
+	IntVariableType
 	CharVariableType
 	BooleanVariableType
 	ClassVariableType
-	// Only used on type checking.
-	ArrayType
-	StringType
 )
 
 type ClassFuncOrMethodAst struct {
 	FuncTP   FuncType
 	FuncName string
-	ReturnTP ReturnType
+	ReturnTP VariableType
 	Params   []*FuncParamAst
 	FuncBody []*StatementAst
+
+	funcSymbol *FuncSymbolTable // We set symbolTable reference here.
 }
 
 type FuncType int
@@ -59,25 +81,11 @@ const (
 	ClassFuncType
 )
 
-type ReturnType struct {
-	TP ReturnTP0
-	// Only used for className type
-	Name string
-}
-
-type ReturnTP0 int
-
-const (
-	VoidReturnType ReturnTP0 = iota
-	IntReturnType
-	CharReturnType
-	BooleanReturnType
-	ClassReturnType
-)
-
 type FuncParamAst struct {
 	ParamName string
 	ParamTP   VariableType
+
+	symbolDesc *SymbolDesc // we put symbolDesc here.
 }
 
 type StatementAst struct {
@@ -106,6 +114,8 @@ type VariableAst struct {
 	// If this variable is a array reference, can allow a array index expression to
 	// locate the array element.
 	ArrayIndex *ExpressionAst
+
+	symbolDesc *SymbolDesc // We set symbolTable reference here.
 }
 
 type ExpressionAst struct {
@@ -131,6 +141,7 @@ const (
 	// * For 5, value is 5
 	// * For "hello", value is "hello"
 	IntegerConstantTermType ExpressionTermType = iota
+	CharacterConstantTermType
 	StringConstantTermType
 	KeyWordConstantTrueTermType
 	KeyWordConstantFalseTermType
@@ -154,6 +165,32 @@ type OpAst struct {
 	OpTP     OpType
 	Op       OpCode
 	priority int
+}
+
+func (op OpAst) String() string {
+	switch op.Op {
+	case AddOpTP:
+		return "+"
+	case MinusOpTP:
+		return "-"
+	case MultipleOpTP:
+		return "*"
+	case DivideOpTP:
+		return "/"
+	case AndOpTP:
+		return "&"
+	case OrOpTP:
+		return "|"
+	case LessOpTP:
+		return "<"
+	case GreaterOpTP:
+		return ">"
+	case EqualOpTp:
+		return "="
+	case ArrayIndexOpTP:
+		return "[]"
+	}
+	return ""
 }
 
 type OpType int
@@ -203,6 +240,8 @@ type CallAst struct {
 	FuncProvider string
 	FuncName     string
 	Params       []*ExpressionAst
+
+	FuncSymbolTable *FuncSymbolTable // We set symbolTable reference here.
 }
 
 type ReturnStatementAst struct {
@@ -210,6 +249,8 @@ type ReturnStatementAst struct {
 }
 
 type VarDeclareAst struct {
-	VarNames []string
-	VarType  VariableType
+	VarName string
+	VarType VariableType
+
+	symbolDesc *SymbolDesc // We set symbolTable reference here.
 }

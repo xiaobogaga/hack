@@ -67,6 +67,7 @@ const (
 	MultipleLineOpenCommentTP                   // /*
 	MultipleLineCloseCommentTP                  // */
 	SingleLineCommentTP                         // //
+	CharacterTP                                 // 'a'
 )
 
 // keyWordTokenTPMap is the mapping from identifier to the corresponding TokenTP.
@@ -151,9 +152,11 @@ func (tokenizer *Tokenizer) getNextToken(line []byte) (*Token, error) {
 		return tokenizer.tokenSimpleSymbol(line)
 	case '/':
 		return tokenizer.tokenCommentOrDivide(line)
+	case '\'':
+		return tokenizer.tokenCharacter(line)
 	case '"':
 		return tokenizer.tokenString(line)
-	case '1', '2', '3', '4', '5', '6', '7', '8', '9':
+	case '1', '2', '3', '4', '5', '6', '7', '8', '9', '0':
 		return tokenizer.tokenNumber(line)
 	default:
 		return tokenizer.toKeywordOrIdentifier(line)
@@ -202,6 +205,25 @@ func (tokenizer *Tokenizer) tokenCommentOrDivide(line []byte) (*Token, error) {
 	default:
 		return tokenizer.tokenMultipleLineOpenComment(line)
 	}
+}
+
+func (tokenizer *Tokenizer) tokenCharacter(line []byte) (*Token, error) {
+	tokenizer.currentPos++
+	if tokenizer.currentPos >= len(line) {
+		return nil, tokenizer.makeError(string(line), tokenizer.currentLine, "incorrect character format")
+	}
+	tokenizer.currentPos++
+	if tokenizer.currentPos >= len(line) || line[tokenizer.currentPos] != '\'' {
+		return nil, tokenizer.makeError(string(line), tokenizer.currentLine, "incorrect character format")
+	}
+	tokenizer.currentPos++
+	return &Token{
+		content:  string(line[tokenizer.currentPos-2 : tokenizer.currentPos-1]),
+		line:     tokenizer.currentLine,
+		startPos: tokenizer.currentPos - 2,
+		endPos:   tokenizer.currentPos - 1,
+		tp:       CharacterTP,
+	}, nil
 }
 
 func (tokenizer *Tokenizer) tokenDivide(line []byte) (*Token, error) {
@@ -258,10 +280,10 @@ func (tokenizer *Tokenizer) tokenString(line []byte) (*Token, error) {
 		return nil, tokenizer.makeError(string(line), tokenizer.currentLine, "incorrect string format")
 	}
 	token := &Token{
-		content:  string(line[startPos:tokenizer.currentPos]),
+		content:  string(line[startPos+1 : tokenizer.currentPos-1]),
 		line:     tokenizer.currentLine,
-		startPos: startPos,
-		endPos:   tokenizer.currentPos,
+		startPos: startPos + 1,
+		endPos:   tokenizer.currentPos - 1,
 		tp:       StringTP,
 	}
 	return token, nil
@@ -354,9 +376,6 @@ func (tokenizer *Tokenizer) Tokenize(rd io.Reader) (tokens []*Token, err error) 
 		if err != nil && err != io.EOF {
 			return nil, err
 		}
-		if err == io.EOF {
-			return tokenizer.tokens, nil
-		}
 		for tokenizer.currentPos < len(line) {
 			err, match := tokenizer.parseLine(line)
 			if err != nil {
@@ -366,6 +385,9 @@ func (tokenizer *Tokenizer) Tokenize(rd io.Reader) (tokens []*Token, err error) 
 			if err != nil {
 				return nil, err
 			}
+		}
+		if err == io.EOF {
+			return tokenizer.tokens, nil
 		}
 	}
 }

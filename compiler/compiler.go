@@ -12,11 +12,10 @@ func compile() {
 	if err != nil {
 		panic(err)
 	}
-	err = buildSymbolTables(classAsts)
+	err = symbolTable.buildSymbolTables(classAsts)
 	if err != nil {
 		panic(err)
 	}
-	// Todo: Semantic analysis
 	err = SymbolExistenceChecker(classAsts)
 	if err != nil {
 		panic(err)
@@ -29,9 +28,7 @@ func compile() {
 	if err != nil {
 		panic(err)
 	}
-	// Todo: generate code
-	codeGenerator := CodeGenerate{}
-	err = codeGenerator.generate(classAsts)
+	err = generateCodes(classAsts)
 	if err != nil {
 		panic(err)
 	}

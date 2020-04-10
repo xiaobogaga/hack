@@ -7,21 +7,62 @@ import (
 
 type SymbolTableMap map[string]*ClassSymbolTable
 
-var symbolTable SymbolTableMap
+var symbolTable SymbolTableMap = map[string]*ClassSymbolTable{}
 
 type ClassSymbolTable struct {
 	ClassName            string
 	VariablesSymbolTable map[string]*SymbolDesc
-	FuncSymbolTable      map[string]*SymbolsInFunc
+	FuncSymbolTable      map[string]*FuncSymbolTable
 	ClassVariableIndex   int
 	FuncVariableIndex    int
 }
+
+type SymbolDesc struct {
+	funcSymbolTable  *FuncSymbolTable
+	classSymbolTable *ClassSymbolTable
+	name             string
+	symbolType       SymbolType   // Represent whether the symbol is a static, object variable, or func, method, constructor and so on.
+	variableType     VariableType // Some identifier can doesn't have variableType, like className, funcName.
+	index            int
+	returnType       VariableType
+}
+
+type FuncSymbolTable struct {
+	// Func related symbol desc, like: funcName, symbolType, etc.
+	classSymbolTable        *ClassSymbolTable
+	FuncSymbolDesc          *SymbolDesc
+	FuncParamsSymbolDesc    []*SymbolDesc
+	FuncParamsSymbolDescMap map[string]*SymbolDesc
+	FuncReturnSymbolDesc    *SymbolDesc
+	FuncLocalVariableDesc   map[string]*SymbolDesc
+	paramIndicator          int // used for param index
+	localVarIndicator       int // used for local variable
+}
+
+type SymbolType int
+
+const (
+	ClassNameSymbolType SymbolType = iota
+	ClassStaticVariableSymbolType
+	ClassVariableSymbolType
+	ClassConstructorSymbolType
+	// Method.
+	ClassMethodSymbolType
+	// Static func
+	ClassFuncSymbolType
+	// The remaining are function scope symbols.
+	FuncParamType
+	FuncVariableType
+	FuncReturnType
+)
+
+var classStaticVariableIndicator = 0
 
 func (table SymbolTableMap) lookUpClass(className string) *ClassSymbolTable {
 	return symbolTable[className]
 }
 
-func (table SymbolTableMap) lookUpFuncInClass(className, funcName string) *SymbolsInFunc {
+func (table SymbolTableMap) lookUpFuncInClass(className, funcName string) *FuncSymbolTable {
 	classSymbolTable := table.lookUpClass(className)
 	if classSymbolTable == nil {
 		return nil
@@ -29,16 +70,56 @@ func (table SymbolTableMap) lookUpFuncInClass(className, funcName string) *Symbo
 	return classSymbolTable.FuncSymbolTable[funcName]
 }
 
-func (table SymbolTableMap) lookUpVarInFunc(className, funcName, varName string) *SymbolDesc {
-	symbolsInFunc := table.lookUpFuncInClass(className, funcName)
-	if symbolsInFunc == nil {
+func (table SymbolTableMap) lookUpStaticFuncInClass(className, funcName string) *FuncSymbolTable {
+	fn := table.lookUpFuncInClass(className, funcName)
+	if fn == nil {
 		return nil
 	}
+	if fn.FuncSymbolDesc.symbolType != ClassFuncSymbolType {
+		return nil
+	}
+	return fn
+}
+
+func (table SymbolTableMap) lookUpNonStaticFuncInClass(className, funcName string) *FuncSymbolTable {
+	fn := table.lookUpFuncInClass(className, funcName)
+	if fn == nil {
+		return nil
+	}
+	if fn.FuncSymbolDesc.symbolType == ClassFuncSymbolType {
+		return nil
+	}
+	return fn
+}
+
+// Looking up variable in current func. Note because this variable also can be a static variable of
+// a class.
+func (table SymbolTableMap) lookUpVarInFunc(className, funcName, varName string) (*SymbolDesc, error) {
+	symbolsInFunc := table.lookUpFuncInClass(className, funcName)
+	if symbolsInFunc == nil {
+		return nil, makeSemanticError("cannot find such variable %s and such func %s.%s", varName, className, funcName)
+	}
+	// Func params
 	ret, ok := symbolsInFunc.FuncParamsSymbolDescMap[varName]
 	if ok {
-		return ret
+		return ret, nil
 	}
-	return symbolsInFunc.FuncLocalVariableDesc[varName]
+	// Or func local variables.
+	ret, ok = symbolsInFunc.FuncLocalVariableDesc[varName]
+	if ok {
+		return ret, nil
+	}
+	// Or class variables.
+	ret = table.lookUpClassVar(className, varName)
+	if ret == nil {
+		return nil, nil
+	}
+	// If this function is a static function, then we cannot use classVariable here.
+	if symbolsInFunc.FuncSymbolDesc.symbolType == ClassFuncSymbolType && ret.symbolType == ClassVariableSymbolType {
+		return nil, makeSemanticError("cannot use non static variable %s in static func %s.%s",
+			varName, className, funcName)
+	}
+	return ret, nil
 }
 
 func (table SymbolTableMap) lookUpClassVar(className string, varName string) *SymbolDesc {
@@ -49,52 +130,92 @@ func (table SymbolTableMap) lookUpClassVar(className string, varName string) *Sy
 	return classSymbol.VariablesSymbolTable[varName]
 }
 
-type SymbolDesc struct {
-	name         string
-	symbolType   SymbolType
-	variableType VariableType // Some identifier can doesn't have variableType, like className, funcName.
-	index        int
-	returnType   ReturnType
+func (table SymbolTableMap) isClassNameExist(className string) bool {
+	return symbolTable[className] != nil
 }
 
-type SymbolsInFunc struct {
-	// Func related symbol desc, like: funcName, symbolType, etc.
-	ClassName               string
-	FuncSymbolDesc          *SymbolDesc
-	FuncParamsSymbolDesc    []*SymbolDesc
-	FuncParamsSymbolDescMap map[string]*SymbolDesc
-	FuncReturnSymbolDesc    *SymbolDesc
-	FuncLocalVariableDesc   map[string]*SymbolDesc
+// There is a call in func $funcName at class $className. we will return the corresponding funcSymbolTable of the
+// refer func, also we did some semantic checking here.
+func (table SymbolTableMap) lookUpFuncInSpecificClassAndFunc(className string, funcName string, callAst *CallAst) (*FuncSymbolTable, error) {
+	funcProvider := callAst.FuncProvider
+	currentFunc := table.lookUpFuncInClass(className, funcName)
+	// If funcProvider is this.
+	if funcProvider == "this" {
+		// If current method is a static method, we don't allow use this here.
+		if currentFunc.FuncSymbolDesc.symbolType == ClassFuncSymbolType {
+			return nil, makeSemanticError("cannot use this in static method %s.%s.", className, funcName)
+		}
+		callerFn := table.lookUpFuncInClass(className, callAst.FuncName)
+		if callerFn.FuncSymbolDesc.symbolType == ClassFuncSymbolType || callerFn.FuncSymbolDesc.symbolType ==
+			ClassConstructorSymbolType {
+			return nil, makeSemanticError("cannot use this call static or constructor method %s",
+				callAst.FuncName)
+		}
+		return callerFn, nil
+	}
+	// If funcProvider is "", we try to find class in current class.
+	if funcProvider == "" {
+		callFn := symbolTable.lookUpFuncInClass(className, callAst.FuncName)
+		if callFn == nil {
+			return nil, makeSemanticError("cannot find such func %s at %s.%s", callAst.FuncName, className, funcName)
+		}
+		// We don't allow in a static method, call non-static method.
+		if currentFunc.FuncSymbolDesc.symbolType == ClassFuncSymbolType && callFn.FuncSymbolDesc.symbolType ==
+			ClassMethodSymbolType {
+			return nil, makeSemanticError("static method %s.%s cannot call non-static method %s.%s", className, funcName,
+				className, callAst.FuncName)
+		}
+		return callFn, nil
+	}
+	// If funcProvider is a variable name in currentFn.
+	varSymbolTable, err := table.lookUpVarInFunc(className, funcName, funcProvider)
+	if err != nil {
+		return nil, err
+	}
+	if varSymbolTable != nil {
+		// Then we can find the method of this variable.
+		if varSymbolTable.variableType.TP != ClassVariableType {
+			return nil, makeSemanticError("var %s doesn't have such method %s at %s.%s", funcProvider, callAst.FuncName,
+				className, funcProvider)
+		}
+		// Check whether this variable has such method.
+		calledFn := symbolTable.lookUpFuncInClass(varSymbolTable.variableType.Name, callAst.FuncName)
+		if calledFn == nil {
+			return nil, makeSemanticError("var %s doesn't have such func %s at %s.%s", funcProvider, callAst.FuncName, className,
+				funcName)
+		}
+		if calledFn.FuncSymbolDesc.symbolType == ClassConstructorSymbolType || calledFn.FuncSymbolDesc.symbolType ==
+			ClassFuncSymbolType {
+			return nil, makeSemanticError("var %s cannot call static method %s at %s.%s", funcProvider, callAst.FuncName, className,
+				funcName)
+		}
+		return calledFn, nil
+	}
+	// Then funcProvider can be a className, and the corresponding method can be a static method of that class.
+	fnSymbol := table.lookUpFuncInClass(callAst.FuncProvider, callAst.FuncName)
+	if fnSymbol == nil {
+		return nil, makeSemanticError("cannot find such func %s.%s at %s.%s", callAst.FuncProvider, callAst.FuncName, className, funcName)
+	}
+	if fnSymbol.FuncSymbolDesc.symbolType == ClassMethodSymbolType {
+		return nil, makeSemanticError("object method %s.%s must be called by an object at %s.%s", callAst.FuncProvider, callAst.FuncName,
+			className, funcName)
+	}
+	// Then because callFn must be a static method or constructor. so we allow it.
+	return fnSymbol, nil
 }
-
-type SymbolType int
-
-const (
-	ClassNameSymbolType SymbolType = iota
-	ClassStaticVariableSymbolType
-	ClassVariableSymbolType
-	ClassConstructorSymbolType
-	ClassMethodSymbolType
-	ClassFuncSymbolType
-	// The remaining are function scope symbols.
-	FuncParamType
-	FuncVariableType
-	FuncReturnType
-)
 
 // If we encounter some variables, some declaration declared twice, then will return err.
-func buildSymbolTables(asts []*ClassAst) error {
+func (table SymbolTableMap) buildSymbolTables(asts []*ClassAst) error {
 	for _, ast := range asts {
 		classSymbolTable, err := buildClassSymbolTable(ast)
 		if err != nil {
 			return err
 		}
-		_, ok := symbolTable[ast.className]
+		_, ok := table[ast.className]
 		if ok {
-			// Todo: we need to add error location information, but now we don't bother to do this.
-			return makeSemanticError("duplicate className: %s", ast.className)
+			return makeSemanticError("found duplicate className: %s", ast.className)
 		}
-		symbolTable[classSymbolTable.ClassName] = classSymbolTable
+		table[classSymbolTable.ClassName] = classSymbolTable
 	}
 	return nil
 }
@@ -103,8 +224,9 @@ func buildClassSymbolTable(ast *ClassAst) (*ClassSymbolTable, error) {
 	classSymbolTable := &ClassSymbolTable{
 		ClassName:            ast.className,
 		VariablesSymbolTable: make(map[string]*SymbolDesc),
-		FuncSymbolTable:      make(map[string]*SymbolsInFunc),
+		FuncSymbolTable:      make(map[string]*FuncSymbolTable),
 	}
+	ast.classSymbolTable = classSymbolTable
 	err := classSymbolTable.buildClassVariables(ast)
 	if err != nil {
 		return nil, err
@@ -118,6 +240,9 @@ func buildClassSymbolTable(ast *ClassAst) (*ClassSymbolTable, error) {
 
 // Build variables table.
 func (classSymbolTable *ClassSymbolTable) buildClassVariables(ast *ClassAst) error {
+	if len(ast.classVariables) <= 0 {
+		return nil
+	}
 	for _, variable := range ast.classVariables {
 		err := classSymbolTable.buildVariable(variable)
 		if err != nil {
@@ -129,29 +254,36 @@ func (classSymbolTable *ClassSymbolTable) buildClassVariables(ast *ClassAst) err
 
 func (classSymbolTable *ClassSymbolTable) buildVariable(classVariableAst *ClassVariableAst) error {
 	classVariableSymbolTable := classSymbolTable.VariablesSymbolTable
-	for _, name := range classVariableAst.VariableNames {
-		_, ok := classVariableSymbolTable[name]
-		if ok {
-			return makeSemanticError("duplicate variable name: %s", name)
-		}
-		variableSymbolDesc := &SymbolDesc{
-			name:         name,
-			symbolType:   ClassStaticVariableSymbolType,
-			variableType: classVariableAst.VariableType,
-			// Here variable has same size memory layout. This won't happen in real programming language.
-			index: classSymbolTable.ClassVariableIndex,
-		}
-		classSymbolTable.ClassVariableIndex++
-		if classVariableAst.FieldTP == ObjectFieldType {
-			variableSymbolDesc.symbolType = ClassVariableSymbolType
-		}
-		classVariableSymbolTable[name] = variableSymbolDesc
+	_, ok := classVariableSymbolTable[classVariableAst.VariableName]
+	if ok {
+		return makeSemanticError("duplicate variable name: %s on class %s", classVariableAst.VariableName, classSymbolTable.ClassName)
 	}
+	variableSymbolDesc := &SymbolDesc{
+		// Link to which class this variable belongs to.
+		classSymbolTable: classSymbolTable,
+		name:             classVariableAst.VariableName,
+		variableType:     classVariableAst.VariableType,
+		// Note: variable has same size memory layout. This won't happen in real programming language.
+	}
+	if classVariableAst.FieldTP == ObjectFieldType {
+		variableSymbolDesc.index, variableSymbolDesc.symbolType = classSymbolTable.ClassVariableIndex,
+			ClassVariableSymbolType
+		classSymbolTable.ClassVariableIndex++
+	} else {
+		variableSymbolDesc.index, variableSymbolDesc.symbolType = classStaticVariableIndicator,
+			ClassStaticVariableSymbolType
+		classStaticVariableIndicator++
+	}
+	classVariableSymbolTable[classVariableAst.VariableName] = variableSymbolDesc
+	classVariableAst.symbolDesc = variableSymbolDesc
 	return nil
 }
 
 // Build methods table.
 func (classSymbolTable *ClassSymbolTable) buildClassMethods(ast *ClassAst) error {
+	if len(ast.classFuncOrMethod) <= 0 {
+		return nil
+	}
 	for _, method := range ast.classFuncOrMethod {
 		err := classSymbolTable.buildMethod(method)
 		if err != nil {
@@ -162,122 +294,139 @@ func (classSymbolTable *ClassSymbolTable) buildClassMethods(ast *ClassAst) error
 }
 
 func (classSymbolTable *ClassSymbolTable) buildMethod(methodAst *ClassFuncOrMethodAst) error {
-	switch methodAst.FuncTP {
-	case ClassConstructorType:
-		return classSymbolTable.buildMethod0(methodAst, ClassConstructorSymbolType)
-	case ClassMethodType:
-		return classSymbolTable.buildMethod0(methodAst, ClassMethodSymbolType)
-	case ClassFuncType:
-		return classSymbolTable.buildMethod0(methodAst, ClassFuncSymbolType)
-	default:
-		// Todo: add err msg
-		return makeSemanticError("")
-	}
+	return classSymbolTable.buildMethod0(methodAst)
 }
 
 // In language like java. the constructor has different semantics than other methods. But in jack, we didn't
 // consider this.
-func (classSymbolTable *ClassSymbolTable) buildMethod0(methodAst *ClassFuncOrMethodAst, methodSymbolType SymbolType) error {
+func (classSymbolTable *ClassSymbolTable) buildMethod0(methodAst *ClassFuncOrMethodAst) error {
+	methodType := ClassConstructorSymbolType
+	switch methodAst.FuncTP {
+	case ClassConstructorType:
+		methodType = ClassConstructorSymbolType
+	case ClassMethodType:
+		methodType = ClassMethodSymbolType
+	case ClassFuncType:
+		methodType = ClassFuncSymbolType
+	}
 	methodName := methodAst.FuncName
 	_, ok := classSymbolTable.FuncSymbolTable[methodName]
 	if ok {
-		return makeSemanticError("duplicate funcName: %s", methodName)
+		return makeSemanticError("duplicate funcName: %s at class %s", methodName, classSymbolTable.ClassName)
 	}
-	funcSymbolTable := new(SymbolsInFunc)
+	funcSymbolTable := new(FuncSymbolTable)
 	funcSymbolTable.FuncSymbolDesc = &SymbolDesc{
-		name:       methodName,
-		symbolType: methodSymbolType,
+		classSymbolTable: classSymbolTable,
+		funcSymbolTable:  funcSymbolTable,
+		name:             methodName,
+		symbolType:       methodType,
 	}
-	funcParamSymbols, funcParamSymbolMap, err := classSymbolTable.buildFuncParams(methodAst.Params)
+	err := classSymbolTable.buildFuncParams(methodAst, funcSymbolTable)
 	if err != nil {
 		return err
 	}
-	funcSymbolTable.FuncParamsSymbolDesc, funcSymbolTable.FuncParamsSymbolDescMap = funcParamSymbols, funcParamSymbolMap
-	funcLocalVariableDesc, err := classSymbolTable.buildFuncLocalVariableDesc(methodAst.FuncBody)
+	err = classSymbolTable.buildFuncLocalVariableDesc(methodAst, funcSymbolTable)
 	if err != nil {
 		return err
 	}
-	funcReturnDesc, err := classSymbolTable.buildFuncReturnDesc(methodAst.ReturnTP)
+	err = classSymbolTable.buildFuncReturnDesc(methodAst.ReturnTP, funcSymbolTable)
 	if err != nil {
 		return err
 	}
-	funcSymbolTable.FuncLocalVariableDesc, funcSymbolTable.FuncReturnSymbolDesc = funcLocalVariableDesc, funcReturnDesc
-	funcSymbolTable.ClassName = classSymbolTable.ClassName
 	classSymbolTable.FuncSymbolTable[methodName] = funcSymbolTable
+	methodAst.funcSymbol = funcSymbolTable
 	return nil
 }
 
-func (classSymbolTable *ClassSymbolTable) buildFuncParams(funcParamsAst []*FuncParamAst) ([]*SymbolDesc, map[string]*SymbolDesc, error) {
-	funcParamsSymbolDescList := make([]*SymbolDesc, len(funcParamsAst))
+func (classSymbolTable *ClassSymbolTable) buildFuncParams(methodAst *ClassFuncOrMethodAst, funcSymbolTable *FuncSymbolTable) error {
+	if methodAst.FuncTP == ClassConstructorType || methodAst.FuncTP == ClassMethodType {
+		funcSymbolTable.paramIndicator++
+	}
+	funcParamsSymbolDescList := make([]*SymbolDesc, 0, len(methodAst.Params))
 	funcParamsSymbolDescMap := map[string]*SymbolDesc{}
-	for _, param := range funcParamsAst {
+	for _, param := range methodAst.Params {
 		_, ok := funcParamsSymbolDescMap[param.ParamName]
 		if ok {
-			return nil, nil, makeSemanticError("duplicate funcParam name %s", param.ParamName)
+			return makeSemanticError("duplicate funcParam %s at func %s.%s", param.ParamName,
+				classSymbolTable.ClassName, funcSymbolTable.FuncSymbolDesc.name)
 		}
 		symbolDesc := &SymbolDesc{
-			name:         param.ParamName,
-			symbolType:   FuncParamType,
-			variableType: param.ParamTP,
-			index:        0, // Todo: need to set index here?
+			funcSymbolTable:  funcSymbolTable,
+			classSymbolTable: classSymbolTable,
+			name:             param.ParamName,
+			symbolType:       FuncParamType,
+			variableType:     param.ParamTP,
+			index:            funcSymbolTable.paramIndicator,
 		}
+		funcSymbolTable.paramIndicator++
 		funcParamsSymbolDescMap[param.ParamName] = symbolDesc
 		funcParamsSymbolDescList = append(funcParamsSymbolDescList, symbolDesc)
+		param.symbolDesc = symbolDesc
 	}
-	return funcParamsSymbolDescList, funcParamsSymbolDescMap, nil
+	funcSymbolTable.FuncParamsSymbolDesc, funcSymbolTable.FuncParamsSymbolDescMap = funcParamsSymbolDescList,
+		funcParamsSymbolDescMap
+	return nil
 }
 
-func (classSymbolTable *ClassSymbolTable) buildFuncLocalVariableDesc(funcBody []*StatementAst) (map[string]*SymbolDesc, error) {
+func (classSymbolTable *ClassSymbolTable) buildFuncLocalVariableDesc(methodAst *ClassFuncOrMethodAst, funcSymbolTable *FuncSymbolTable) error {
 	funcLocalVariableDesc := map[string]*SymbolDesc{}
-	for _, statement := range funcBody {
-		funcVarDescs, err := classSymbolTable.buildStatement(statement)
+	funcSymbolTable.FuncLocalVariableDesc = funcLocalVariableDesc
+	for _, statement := range methodAst.FuncBody {
+		funcLocalVarDesc, err := classSymbolTable.buildLocalVarDeclareStatement(statement, funcSymbolTable)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		err = addFuncVarDescs(funcVarDescs, funcLocalVariableDesc)
+		err = classSymbolTable.addFuncLocalVarDescs(funcSymbolTable, funcLocalVarDesc)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return nil, nil
+	return nil
 }
 
-func addFuncVarDescs(funcVarDescs []*SymbolDesc, funcLocalVariableDesc map[string]*SymbolDesc) error {
-	for _, funcVarDesc := range funcVarDescs {
-		_, ok := funcLocalVariableDesc[funcVarDesc.name]
+func (classSymbolTable *ClassSymbolTable) addFuncLocalVarDescs(funcSymbolTable *FuncSymbolTable, funcLocalVarDesc []*SymbolDesc) error {
+	for _, funcVarDesc := range funcLocalVarDesc {
+		_, ok := funcSymbolTable.FuncLocalVariableDesc[funcVarDesc.name]
 		if ok {
-			// Todo: fill in funcName.
-			return makeSemanticError("duplicate var name %s in %s.", funcVarDesc.name)
+			return makeSemanticError("duplicate var %s at %s.%s", funcVarDesc.name,
+				classSymbolTable.ClassName, funcSymbolTable.FuncSymbolDesc.name)
 		}
-		funcLocalVariableDesc[funcVarDesc.name] = funcVarDesc
+		_, ok = funcSymbolTable.FuncParamsSymbolDescMap[funcVarDesc.name]
+		if ok {
+			return makeSemanticError("duplicate var %s at %s.%s", funcVarDesc.name,
+				classSymbolTable.ClassName, funcSymbolTable.FuncSymbolDesc.name)
+		}
+		funcSymbolTable.FuncLocalVariableDesc[funcVarDesc.name] = funcVarDesc
 	}
 	return nil
 }
 
 // In jack, variable declaration is appeared before if, while ... other statements.
-func (classSymbolTable *ClassSymbolTable) buildStatement(statementAst *StatementAst) (descs []*SymbolDesc, err error) {
+func (classSymbolTable *ClassSymbolTable) buildLocalVarDeclareStatement(statementAst *StatementAst, funcSymbolTable *FuncSymbolTable) (descs []*SymbolDesc, err error) {
 	if statementAst.StatementTP != VariableDeclareStatementTP {
 		return nil, nil
 	}
 	varDeclareAst := statementAst.Statement.(*VarDeclareAst)
-	for _, varName := range varDeclareAst.VarNames {
-		descs = append(descs, &SymbolDesc{
-			name:         varName,
-			symbolType:   FuncVariableType,
-			variableType: varDeclareAst.VarType,
-			// Todo: we need to set index here.
-			index: 0,
-		})
+	varSymbolDesc := &SymbolDesc{
+		funcSymbolTable:  funcSymbolTable,
+		classSymbolTable: classSymbolTable,
+		name:             varDeclareAst.VarName,
+		symbolType:       FuncVariableType,
+		variableType:     varDeclareAst.VarType,
+		index:            funcSymbolTable.localVarIndicator,
 	}
+	descs = append(descs, varSymbolDesc)
+	funcSymbolTable.localVarIndicator++
+	varDeclareAst.symbolDesc = varSymbolDesc
 	return
 }
 
-func (classSymbolTable *ClassSymbolTable) buildFuncReturnDesc(returnTp ReturnType) (*SymbolDesc, error) {
-	// Todo: do we need to set index here?
-	return &SymbolDesc{
+func (classSymbolTable *ClassSymbolTable) buildFuncReturnDesc(returnTp VariableType, funcSymbolTable *FuncSymbolTable) error {
+	funcSymbolTable.FuncReturnSymbolDesc = &SymbolDesc{
 		symbolType: FuncReturnType,
 		returnType: returnTp,
-	}, nil
+	}
+	return nil
 }
 
 func makeSemanticError(format string, msg ...interface{}) error {

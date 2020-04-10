@@ -2,24 +2,19 @@ package compiler
 
 import (
 	"fmt"
+	"strconv"
 )
 
 var conditionLabel = 0
 
-type CodeGenerate struct{}
-
-func (codeGenerate CodeGenerate) generate(classAsts []*ClassAst) error {
+func generateCodes(classAsts []*ClassAst) error {
 	for _, classAst := range classAsts {
-		err := codeGenerate.generateSingleClassCode(classAst)
+		err := classAst.generateCode()
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (codeGenerate CodeGenerate) generateSingleClassCode(ast *ClassAst) error {
-	return ast.generateCode()
 }
 
 func (classAst *ClassAst) generateCode() error {
@@ -38,10 +33,8 @@ func (classAst *ClassAst) generateCode() error {
 }
 
 func (classAst *ClassAst) generateCodeForClassVariable(variable *ClassVariableAst) {
-	for _, name := range variable.VariableNames {
-		classVariable := symbolTable.lookUpClassVar(classAst.className, name)
-		classAst.writeOutput(fmt.Sprintf("PUSH STATIC %d", classVariable.index))
-	}
+	classVariable := symbolTable.lookUpClassVar(classAst.className, variable.VariableName)
+	classAst.writeOutput(fmt.Sprintf("PUSH STATIC %d", classVariable.index))
 }
 
 // Generate func method vm code.
@@ -110,7 +103,7 @@ func (classAst *ClassAst) generateLetStatementCode(method *ClassFuncOrMethodAst,
 
 // Current value is already on top.
 func (classAst ClassAst) generateSaveToVariableCode(method *ClassFuncOrMethodAst, variable *VariableAst) {
-	varSymbol := symbolTable.lookUpVarInFunc(classAst.className, method.FuncName, variable.VarName)
+	varSymbol, _ := symbolTable.lookUpVarInFunc(classAst.className, method.FuncName, variable.VarName)
 	// Array is special.
 	if variable.ArrayIndex != nil {
 		switch varSymbol.symbolType {
@@ -241,6 +234,9 @@ func (classAst *ClassAst) generateExpressionTermCode(method *ClassFuncOrMethodAs
 	switch exprTerm.Type {
 	case IntegerConstantTermType:
 		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", exprTerm.Value.(int)))
+	case CharacterConstantTermType:
+		v, _ := strconv.Atoi(exprTerm.Value.(string))
+		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", v))
 	case StringConstantTermType:
 		classAst.generateConstantStringCode(exprTerm.Value.(string))
 	case KeyWordConstantFalseTermType, KeyWordConstantNullTermType:
@@ -259,15 +255,15 @@ func (classAst *ClassAst) generateExpressionTermCode(method *ClassFuncOrMethodAs
 	case SubExpressionTermType:
 		classAst.generateExpressionCode(method, exprTerm.Value.(*ExpressionAst))
 	case UnaryTermExpressionTermType:
-		classAst.generateExpressionCode(method, exprTerm.Value.(*ExpressionAst))
+		classAst.generateExpressionTermCode(method, exprTerm.Value.(*ExpressionTerm))
 	}
 	classAst.generateUnaryOpCode(method, exprTerm.UnaryOp)
 }
 
 func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, callAst *CallAst) {
-	funcDesc := classAst.getFuncDefRef(method, callAst.FuncName, callAst.FuncProvider)
+	funcDesc, _ := symbolTable.lookUpFuncInSpecificClassAndFunc(classAst.className, method.FuncName, callAst)
 	if funcDesc.FuncSymbolDesc.symbolType == ClassConstructorSymbolType {
-		classAst.writeOutput(fmt.Sprintf("PUSH %d", symbolTable.lookUpClass(funcDesc.ClassName).ClassVariableIndex))
+		classAst.writeOutput(fmt.Sprintf("PUSH %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
 		classAst.writeOutput("CALL Memory.alloc 1")
 	}
 	if funcDesc.FuncSymbolDesc.symbolType == ClassFuncSymbolType {
@@ -277,9 +273,9 @@ func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, cal
 	for _, param := range callAst.Params {
 		classAst.generateExpressionTermOrExpressionCode(method, param)
 	}
-	classAst.writeOutput(fmt.Sprintf("CALL %s_%s %d", funcDesc.ClassName, funcDesc.FuncSymbolDesc.name, len(funcDesc.FuncParamsSymbolDesc)))
+	classAst.writeOutput(fmt.Sprintf("CALL %s_%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, len(funcDesc.FuncParamsSymbolDesc)))
 	// If return type is void. must put a simple POP.
-	if funcDesc.FuncReturnSymbolDesc.returnType.TP == VoidReturnType {
+	if funcDesc.FuncReturnSymbolDesc.returnType.TP == VoidVariableType {
 		classAst.writeOutput("POP CONSTANT 0")
 	}
 }
@@ -294,10 +290,10 @@ func (classAst *ClassAst) generateArrayIndexCode(method *ClassFuncOrMethodAst, e
 }
 
 func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varName string) {
-	symbol := symbolTable.lookUpVarInFunc(classAst.className, method.FuncName, varName)
-	switch symbol.symbolType {
+	varSymbol, _ := symbolTable.lookUpVarInFunc(classAst.className, method.FuncName, varName)
+	switch varSymbol.symbolType {
 	case ClassStaticVariableSymbolType:
-		classAst.writeOutput(fmt.Sprintf("PUSH STATIC %d", symbol.index))
+		classAst.writeOutput(fmt.Sprintf("PUSH STATIC %d", varSymbol.index))
 	case ClassVariableSymbolType:
 		// If this variable name is a class variable. then it must be a variable of current class.
 		// Then we can get the variable from the first parameter of current method.
@@ -306,9 +302,9 @@ func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varN
 		classAst.writeOutput("POP POINTER 0")
 		classAst.writeOutput("PUSH THIS %d")
 	case FuncParamType:
-		classAst.writeOutput(fmt.Sprintf("PUSH ARGUMENT %d", symbol.index))
+		classAst.writeOutput(fmt.Sprintf("PUSH ARGUMENT %d", varSymbol.index))
 	case FuncVariableType:
-		classAst.writeOutput(fmt.Sprintf("PUSH LOCAL %d", symbol.index))
+		classAst.writeOutput(fmt.Sprintf("PUSH LOCAL %d", varSymbol.index))
 	}
 }
 

@@ -110,18 +110,48 @@ func TestTokenizer_TokenCommentOrDivide(t *testing.T) {
 	}
 }
 
+func TestTokenizer_TokenCharacter(t *testing.T) {
+	testData := []struct {
+		line          []byte
+		currentPos    int
+		expectedToken *Token
+	}{
+		{line: []byte(`'a'`), currentPos: 3, expectedToken: &Token{
+			content:  "a",
+			tp:       CharacterTP,
+			startPos: 1,
+			endPos:   2,
+		}},
+	}
+	tokenizer := &Tokenizer{}
+	for _, data := range testData {
+		tokenizer.Reset()
+		token, err := tokenizer.tokenCharacter(data.line)
+		assert.Nil(t, err)
+		assert.Equal(t, data.expectedToken, token)
+		assert.Equal(t, data.currentPos, tokenizer.currentPos)
+	}
+}
+
 func TestTokenizer_TokenString(t *testing.T) {
 	testData := []struct {
 		line               []byte
 		expectedToken      *Token
 		expectedCurrentPos int
 	}{
-		{line: []byte(`" hello"`), expectedCurrentPos: 8, expectedToken: &Token{
-			content: `" hello"`,
-			endPos:  8,
-			tp:      StringTP,
-		}},
-		{line: []byte(`"hello`), expectedCurrentPos: 6, expectedToken: nil},
+		{
+			line:               []byte(`" hello"`),
+			expectedCurrentPos: 8,
+			expectedToken: &Token{
+				content:  " hello",
+				endPos:   7,
+				startPos: 1,
+				tp:       StringTP,
+			}},
+		{
+			line:               []byte(`"hello`),
+			expectedCurrentPos: 6,
+			expectedToken:      nil},
 	}
 	tokenizer := &Tokenizer{}
 	for _, data := range testData {
@@ -343,6 +373,7 @@ class Main {
         var char c;
         var String d;
         let a = 10;
+		let c = 'b';
         let b = c + a;
 		do Output.printString("Hello world");
 		do Output.println();
@@ -352,8 +383,12 @@ class Main {
 }
 `)
 	tokenizer := &Tokenizer{}
-	tokens, err := tokenizer.Tokenize(bytes.NewReader(content))
+	_, err := tokenizer.Tokenize(bytes.NewReader(content))
 	assert.Nil(t, err)
+	// printTestTokens(tokens)
+}
+
+func printTestTokens(tokens []*Token) {
 	for _, t := range tokens {
 		fmt.Printf("%+v\n", t)
 	}
