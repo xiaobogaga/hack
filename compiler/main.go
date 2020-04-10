@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"softwares_for_nand_to_tetries/compiler/internal"
+	"nands/compiler/internal"
 )
 
 var (

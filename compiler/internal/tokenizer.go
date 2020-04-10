@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"softwares_for_nand_to_tetries/util"
+	"nands/util"
 )
 
 // A simple Tokenizer for hack.

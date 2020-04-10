@@ -1,4 +1,4 @@
-module softwares_for_nand_to_tetries
+module nands
 
 go 1.12
 
