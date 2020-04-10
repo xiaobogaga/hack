@@ -145,39 +145,46 @@ func (classAst ClassAst) generateSaveToVariableCode(method *ClassFuncOrMethodAst
 }
 
 // If condition vm code.
-// IF-GOTO Else_Label
-// If statement vm code.
+// IF-GOTO if_statement_label
+// else statement vm code.
 // GOTO Exit_Label
-// Label Else_Label
-// Else statement vm code
+// Label if_statement_Label
+// if statement vm code
 // Exit_Label
+// false, null is 0 and true is -1. IF-GOTO jumps to label when the top value is not zero.
 func (classAst *ClassAst) generateIfStatementCode(method *ClassFuncOrMethodAst, statement *StatementAst) {
 	ifStatement := statement.Statement.(*IfStatementAst)
 	classAst.generateExpressionCode(method, ifStatement.Condition)
 	// Generate if, else code.
-	elseStatementLabel, exitStatementLabel := fmt.Sprintf("else_%d", conditionLabel), fmt.Sprintf("if_exit_%d", conditionLabel+1)
+	ifStatementLabel, exitStatementLabel := fmt.Sprintf("if_%d", conditionLabel), fmt.Sprintf("if_exit_%d", conditionLabel+1)
 	conditionLabel += 2
-	classAst.writeOutput("IF-GOTO " + elseStatementLabel)
-	classAst.generateStatementsCode(method, ifStatement.IfTrueStatements)
-	classAst.writeOutput("GOTO " + exitStatementLabel)
-	classAst.writeOutput("Label " + elseStatementLabel)
+	classAst.writeOutput("IF-GOTO " + ifStatementLabel)
 	classAst.generateStatementsCode(method, ifStatement.ElseStatements)
+	classAst.writeOutput("GOTO " + exitStatementLabel)
+	classAst.writeOutput("Label " + ifStatementLabel)
+	classAst.generateStatementsCode(method, ifStatement.IfTrueStatements)
 	classAst.writeOutput("Label " + exitStatementLabel)
 }
 
 // Label while_check_label
 // While condition vm code
-// IF-GOTO Exit_Label
+// IF-GOTO while_statements_Label
+// GOTO Exit_Label
+// Label while_statements_label
 // Statements vm codes
 // GOTO while_check_label
 // Label Exit_Label
+// false, null is 0 and true is -1. IF-GOTO jumps to label when the top value is not zero.
 func (classAst *ClassAst) generateWhileStatementCode(method *ClassFuncOrMethodAst, statement *StatementAst) {
 	whileStatement := statement.Statement.(*WhileStatementAst)
-	whileCheckLabel, exitLabel := fmt.Sprintf("while_check_%d", conditionLabel), fmt.Sprintf("while_exit_%d", conditionLabel+1)
-	conditionLabel += 2
+	whileCheckLabel, exitLabel, statementsLabel := fmt.Sprintf("while_check_%d", conditionLabel), fmt.Sprintf("while_exit_%d", conditionLabel+1),
+		fmt.Sprintf("while_statements_%d", conditionLabel)
+	conditionLabel += 3
 	classAst.writeOutput("Label " + whileCheckLabel)
 	classAst.generateExpressionCode(method, whileStatement.Condition)
-	classAst.writeOutput("IF-GOTO " + exitLabel)
+	classAst.writeOutput("IF-GOTO " + statementsLabel) // If
+	classAst.writeOutput("GOTO " + exitLabel)
+	classAst.writeOutput("Label " + statementsLabel)
 	classAst.generateStatementsCode(method, whileStatement.Statements)
 	classAst.writeOutput("GOTO " + whileCheckLabel)
 	classAst.writeOutput("Label " + exitLabel)
@@ -210,6 +217,9 @@ func (classAst *ClassAst) generateReturnStatementCode(method *ClassFuncOrMethodA
 //
 // a postOrder traversal is enough.
 func (classAst *ClassAst) generateExpressionCode(method *ClassFuncOrMethodAst, expr *ExpressionAst) {
+	if expr == nil {
+		return
+	}
 	if expr.LeftExpr != nil {
 		classAst.generateExpressionTermOrExpressionCode(method, expr.LeftExpr)
 	}
@@ -222,6 +232,9 @@ func (classAst *ClassAst) generateExpressionCode(method *ClassFuncOrMethodAst, e
 }
 
 func (classAst *ClassAst) generateExpressionTermOrExpressionCode(method *ClassFuncOrMethodAst, expr interface{}) {
+	if expr == nil {
+		return
+	}
 	exprTerm, ok := expr.(*ExpressionTerm)
 	if ok {
 		classAst.generateExpressionTermCode(method, exprTerm)
@@ -261,19 +274,23 @@ func (classAst *ClassAst) generateExpressionTermCode(method *ClassFuncOrMethodAs
 }
 
 func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, callAst *CallAst) {
-	funcDesc, _ := symbolTable.lookUpFuncInSpecificClassAndFunc(classAst.className, method.FuncName, callAst)
+	funcDesc := callAst.FuncSymbolTable
 	if funcDesc.FuncSymbolDesc.symbolType == ClassConstructorSymbolType {
 		classAst.writeOutput(fmt.Sprintf("PUSH %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
 		classAst.writeOutput("CALL Memory.alloc 1")
 	}
-	if funcDesc.FuncSymbolDesc.symbolType == ClassFuncSymbolType {
+	if funcDesc.FuncSymbolDesc.symbolType == ClassMethodSymbolType {
 		// Push the base memory address of the caller to stack.
 		classAst.generateVarNameCode(method, callAst.FuncProvider)
 	}
 	for _, param := range callAst.Params {
 		classAst.generateExpressionTermOrExpressionCode(method, param)
 	}
-	classAst.writeOutput(fmt.Sprintf("CALL %s_%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, len(funcDesc.FuncParamsSymbolDesc)))
+	paramsLen := len(funcDesc.FuncParamsSymbolDesc)
+	if funcDesc.FuncSymbolDesc.symbolType != ClassFuncSymbolType {
+		paramsLen++
+	}
+	classAst.writeOutput(fmt.Sprintf("CALL %s_%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, paramsLen))
 	// If return type is void. must put a simple POP.
 	if funcDesc.FuncReturnSymbolDesc.returnType.TP == VoidVariableType {
 		classAst.writeOutput("POP CONSTANT 0")
@@ -286,10 +303,14 @@ func (classAst *ClassAst) generateArrayIndexCode(method *ClassFuncOrMethodAst, e
 	classAst.generateExpressionCode(method, expr.RightExpr.(*ExpressionAst))
 	classAst.writeOutput("ADD")
 	classAst.writeOutput("POP POINTER 1")
-	classAst.writeOutput("PUSH THAT 0")
+	classAst.writeOutput("PUSH THAT 1")
 }
 
 func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varName string) {
+	if varName == "" || varName == "this" {
+		// Then put the address of current object to stack.
+		classAst.writeOutput("PUSH ARGUMENT 0")
+	}
 	varSymbol, _ := symbolTable.lookUpVarInFunc(classAst.className, method.FuncName, varName)
 	switch varSymbol.symbolType {
 	case ClassStaticVariableSymbolType:
@@ -299,8 +320,10 @@ func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varN
 		// Then we can get the variable from the first parameter of current method.
 		// What if this variable is a class object, we must get
 		classAst.writeOutput("PUSH ARGUMENT 0")
+		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", varSymbol.index))
+		classAst.writeOutput("ADD")
 		classAst.writeOutput("POP POINTER 0")
-		classAst.writeOutput("PUSH THIS %d")
+		classAst.writeOutput("PUSH THIS 0")
 	case FuncParamType:
 		classAst.writeOutput(fmt.Sprintf("PUSH ARGUMENT %d", varSymbol.index))
 	case FuncVariableType:
@@ -311,9 +334,12 @@ func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varN
 func (classAst *ClassAst) generateConstantStringCode(str string) {
 	classAst.writeOutput(fmt.Sprintf("PUSH %d", len(str)))
 	classAst.writeOutput("CALL String.new 1")
+	// use a temp variable to save string object address.
+	classAst.writeOutput("POP TEMP 0")
 	for _, character := range str {
+		classAst.writeOutput("PUSH TEMP 0")
 		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", character))
-		classAst.writeOutput("CALL String.appendChar 1")
+		classAst.writeOutput("CALL String.appendChar 2")
 	}
 }
 
@@ -339,6 +365,7 @@ func (classAst *ClassAst) generateOpCode(method *ClassFuncOrMethodAst, op *OpAst
 	case EqualOpTp:
 		classAst.writeOutput("EQ")
 	case ArrayIndexOpTP:
+		classAst.writeOutput("ADD")
 		classAst.writeOutput("POP POINTER 1")
 		classAst.writeOutput("PUSH THAT 1")
 	}
