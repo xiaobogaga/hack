@@ -202,9 +202,11 @@ func (classAst *ClassAst) generateDoStatementCode(method *ClassFuncOrMethodAst, 
 }
 
 func (classAst *ClassAst) generateReturnStatementCode(method *ClassFuncOrMethodAst, statement *StatementAst) {
-	returnStatement := statement.Statement.(*ReturnStatementAst)
-	for _, stm := range returnStatement.Return {
-		classAst.generateExpressionCode(method, stm)
+	if statement.Statement != nil {
+		returnStatement := statement.Statement.(*ReturnStatementAst)
+		for _, stm := range returnStatement.Return {
+			classAst.generateExpressionCode(method, stm)
+		}
 	}
 	classAst.writeOutput("return")
 }
@@ -280,8 +282,11 @@ func (classAst *ClassAst) generateExpressionTermCode(method *ClassFuncOrMethodAs
 }
 
 func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, callAst *CallAst) {
-	funcDesc := callAst.FuncSymbolTable
-	if funcDesc.FuncSymbolDesc.symbolType == ClassConstructorSymbolType {
+	funcDesc, _ := symbolTable.lookUpFuncInSpecificClassAndFunc(classAst.className, method.FuncName, callAst)
+	if funcDesc.classSymbolTable.ClassName == "String" && funcDesc.FuncSymbolDesc.name == "new" {
+		// Because String.new will allocate memory.
+		// So we treat it special here.
+	} else if funcDesc.FuncSymbolDesc.symbolType == ClassConstructorSymbolType {
 		classAst.writeOutput(fmt.Sprintf("PUSH %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
 		classAst.writeOutput("CALL Memory.alloc 1")
 	}

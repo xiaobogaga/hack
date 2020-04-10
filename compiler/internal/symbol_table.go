@@ -9,6 +9,127 @@ type SymbolTableMap map[string]*ClassSymbolTable
 
 var symbolTable SymbolTableMap = map[string]*ClassSymbolTable{}
 
+func (table SymbolTableMap) initStandardLibrary() {
+	table.addStandardClassFuncs(
+		"Math",
+		[]string{"init", "abs", "multiply", "divide", "min", "max", "sqrt"},
+		[]SymbolType{
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+		},
+		[]VariableType{
+			{TP: VoidVariableType}, {TP: IntVariableType}, {TP: IntVariableType}, {TP: IntVariableType},
+			{TP: IntVariableType}, {TP: IntVariableType}, {TP: IntVariableType},
+		},
+	)
+	table.addStandardClassFuncs(
+		"String",
+		[]string{
+			"new", "dispose", "length", "charAt", "setCharAt", "appendChar", "eraseLastChar", "intValue", "setInt",
+			"backSpace", "doubleQuote", "newLine",
+		},
+		[]SymbolType{
+			ClassConstructorSymbolType, ClassMethodSymbolType, ClassMethodSymbolType, ClassMethodSymbolType, ClassMethodSymbolType,
+			ClassMethodSymbolType, ClassMethodSymbolType, ClassMethodSymbolType, ClassMethodSymbolType, ClassFuncSymbolType,
+			ClassFuncSymbolType, ClassFuncSymbolType,
+		},
+		[]VariableType{
+			{TP: ClassVariableType, Name: "String"}, {TP: VoidVariableType}, {TP: IntVariableType}, {TP: CharVariableType},
+			{TP: VoidVariableType}, {TP: ClassVariableType, Name: "String"}, {TP: VoidVariableType}, {TP: IntVariableType},
+			{TP: VoidVariableType}, {TP: CharVariableType}, {TP: CharVariableType}, {TP: CharVariableType},
+		},
+	)
+	table.addStandardClassFuncs(
+		"Array",
+		[]string{"new", "dispose"},
+		[]SymbolType{ClassFuncSymbolType, ClassMethodSymbolType},
+		[]VariableType{
+			{TP: ClassVariableType, Name: "Array"}, {TP: VoidVariableType},
+		},
+	)
+	table.addStandardClassFuncs(
+		"Output",
+		[]string{"init", "moveCursor", "printChar", "printString", "printInt", "println", "backSpace"},
+		[]SymbolType{
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+		},
+		[]VariableType{
+			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
+			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
+		},
+	)
+	table.addStandardClassFuncs(
+		"Screen",
+		[]string{"init", "clearScreen", "setColor", "drawPixel", "drawLine", "drawRectangle", "drawCircle"},
+		[]SymbolType{
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+		},
+		[]VariableType{
+			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
+			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
+		},
+	)
+	table.addStandardClassFuncs(
+		"Keyboard",
+		[]string{"init", "keyPressed", "readChar", "readLine", "readInt"},
+		[]SymbolType{
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+		},
+		[]VariableType{
+			{TP: VoidVariableType}, {TP: CharVariableType}, {TP: CharVariableType}, {TP: ClassVariableType, Name: "string"},
+			{TP: IntVariableType},
+		},
+	)
+	table.addStandardClassFuncs(
+		"Memory",
+		[]string{"init", "peek", "poke", "alloc", "deAlloc"},
+		[]SymbolType{
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+		},
+		[]VariableType{
+			{TP: VoidVariableType}, {TP: IntVariableType}, {TP: VoidVariableType}, {TP: ClassVariableType, Name: "Array"},
+			{TP: VoidVariableType},
+		},
+	)
+	table.addStandardClassFuncs(
+		"Sys",
+		[]string{"init", "halt", "error", "wait"},
+		[]SymbolType{
+			ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType, ClassFuncSymbolType,
+		},
+		[]VariableType{
+			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
+		},
+	)
+}
+
+func (table SymbolTableMap) addStandardClassFuncs(className string, funcNames []string, funcTypes []SymbolType, returnTP []VariableType) {
+	classSymbolTable := &ClassSymbolTable{ClassName: className, FuncSymbolTable: map[string]*FuncSymbolTable{}}
+	for i, funName := range funcNames {
+		fn := &FuncSymbolTable{
+			classSymbolTable: classSymbolTable,
+		}
+		fnDesc := &SymbolDesc{
+			funcSymbolTable:  fn,
+			classSymbolTable: classSymbolTable,
+			name:             funName,
+			symbolType:       funcTypes[i],
+			returnType:       returnTP[i],
+		}
+		fnReturnDesc := &SymbolDesc{
+			funcSymbolTable:  fn,
+			classSymbolTable: classSymbolTable,
+			symbolType:       FuncReturnType,
+			returnType:       returnTP[i],
+		}
+		fn.FuncSymbolDesc, fn.FuncReturnSymbolDesc = fnDesc, fnReturnDesc
+		classSymbolTable.FuncSymbolTable[funName] = fn
+	}
+	table[className] = classSymbolTable
+}
+
 type ClassSymbolTable struct {
 	ClassName            string
 	VariablesSymbolTable map[string]*SymbolDesc
@@ -423,8 +544,10 @@ func (classSymbolTable *ClassSymbolTable) buildLocalVarDeclareStatement(statemen
 
 func (classSymbolTable *ClassSymbolTable) buildFuncReturnDesc(returnTp VariableType, funcSymbolTable *FuncSymbolTable) error {
 	funcSymbolTable.FuncReturnSymbolDesc = &SymbolDesc{
-		symbolType: FuncReturnType,
-		returnType: returnTp,
+		classSymbolTable: classSymbolTable,
+		funcSymbolTable:  funcSymbolTable,
+		symbolType:       FuncReturnType,
+		returnType:       returnTp,
 	}
 	return nil
 }

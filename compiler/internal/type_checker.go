@@ -479,7 +479,7 @@ func (classAst *ClassAst) getAndCheckExpressionType0(methodAst *ClassFuncOrMetho
 		}
 		exprTerm.TP = t
 	case SubRoutineCallTermType:
-		exprTerm.TP = &exprTerm.Value.(*CallAst).FuncSymbolTable.FuncReturnSymbolDesc.variableType
+		exprTerm.TP = &exprTerm.Value.(*CallAst).FuncSymbolTable.FuncReturnSymbolDesc.returnType
 	}
 	err = classAst.checkTypeMatchOnUnaryOp(methodAst, t, exprTerm.UnaryOp)
 	if err != nil {

@@ -203,7 +203,8 @@ func TestTypeChecker_typeCheckStatements(t *testing.T) {
 						let c = ~(~((1 + 2) > 0));
 						let t = null;
 						do t1.set(b);
-						let t3 = t2 + t3;
+						// let t3 = t2 + t3;
+						let t3 = t1.get();
 						return null;
 					}
 					method Test print() {
