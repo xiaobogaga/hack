@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"nands/util"
+	"unicode"
 )
 
 // A simple Tokenizer for hack.
@@ -168,7 +169,7 @@ func (tokenizer *Tokenizer) getNextToken(line []byte) (*Token, error) {
 func (tokenizer *Tokenizer) trimSpace(line []byte) {
 	for tokenizer.currentPos < len(line) {
 		l := line[tokenizer.currentPos]
-		if l == ' ' || l == '\n' || l == '	' {
+		if unicode.IsSpace(rune(l)) {
 			tokenizer.currentPos++
 			continue
 		}
@@ -361,7 +362,7 @@ func (tokenizer *Tokenizer) tryTransformToIdentifier(tokenBytes []byte) (*Token,
 }
 
 func (tokenizer *Tokenizer) makeError(near string, line int, msg string) error {
-	return errors.New(fmt.Sprintf("tokenizer error near %s at line %d, msg: %s", near, line, msg))
+	return errors.New(fmt.Sprintf("Tokenizer: tokenizer error near %s at line %d, msg: %s", near, line, msg))
 }
 
 // Tokenizer accepts a source `rd` and tokenizer it's content according to hack language rules.

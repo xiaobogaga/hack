@@ -401,5 +401,6 @@ func (classAst *ClassAst) writeOutput(output string) {
 }
 
 func (classAst *ClassAst) saveVMCode() error {
+	println("save vm file: %s/%s.vm", classAst.path, classAst.className)
 	return classAst.writer.Close()
 }

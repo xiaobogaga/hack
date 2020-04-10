@@ -38,12 +38,17 @@ func (parser *Parser) reset() {
 }
 
 func isJackFile(fileName string) bool {
-	return fileName[len(fileName)-5:] == ".jack"
+	if len(fileName) <= 5 {
+		return false
+	}
+	f := fileName[len(fileName)-5:]
+	return f == ".jack"
 }
 
 func (parser *Parser) ParseFile(filePath, fileName string) (*ClassAst, error) {
+	fmt.Printf("Parser: parse file: " + filePath + "/" + fileName + "\n")
 	tokenizer := &Tokenizer{}
-	rd, err := os.Open(fileName)
+	rd, err := os.Open(filePath + "/" + fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -797,9 +802,9 @@ func (parser *Parser) makeError(useCurrentPos bool) error {
 		currentPos--
 	}
 	if currentPos < 0 || currentPos >= len(parser.currentTokens) {
-		return errors.New("unexpected token ends")
+		return errors.New("Parser: unexpected token ends")
 	}
 	currentToken := parser.currentTokens[currentPos]
-	return errors.New(fmt.Sprintf("syntax error near %s at line %d", currentToken.content,
+	return errors.New(fmt.Sprintf("Parser: syntax error near %s at line %d", currentToken.content,
 		currentToken.line))
 }
