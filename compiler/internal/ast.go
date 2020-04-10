@@ -1,7 +1,7 @@
-package compiler
+package internal
 
 import (
-	"io"
+	"os"
 )
 
 // In this file, we defined all ast of hack programming languages according to hack programming language grammar.
@@ -9,7 +9,8 @@ import (
 // declaration and dependency declaration.
 
 type ClassAst struct {
-	writer            io.Writer
+	writer            *os.File
+	path              string
 	className         string
 	classVariables    []*ClassVariableAst
 	classFuncOrMethod []*ClassFuncOrMethodAst

@@ -1,4 +1,4 @@
-package compiler
+package internal
 
 import (
 	"errors"
@@ -24,7 +24,7 @@ func (parser *Parser) Parse(filePath string) (classAsts []*ClassAst, err error) 
 			continue
 		}
 		parser.reset()
-		classAst, err := parser.ParseFile(file.Name())
+		classAst, err := parser.ParseFile(filePath, file.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -41,7 +41,7 @@ func isJackFile(fileName string) bool {
 	return fileName[len(fileName)-5:] == ".jack"
 }
 
-func (parser *Parser) ParseFile(fileName string) (*ClassAst, error) {
+func (parser *Parser) ParseFile(filePath, fileName string) (*ClassAst, error) {
 	tokenizer := &Tokenizer{}
 	rd, err := os.Open(fileName)
 	if err != nil {
@@ -52,7 +52,12 @@ func (parser *Parser) ParseFile(fileName string) (*ClassAst, error) {
 		return nil, err
 	}
 	parser.currentTokens = tokens
-	return parser.ParseClassDeclaration()
+	classAst, err := parser.ParseClassDeclaration()
+	if err != nil {
+		return nil, err
+	}
+	classAst.path = filePath
+	return classAst, nil
 }
 
 // class Identifier {

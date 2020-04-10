@@ -1,35 +1,30 @@
-package compiler
+package internal
 
-import "flag"
-
-var (
-	path = flag.String("path", ".", "the path of source file")
-)
-
-func compile() {
+func Compile(path string) error {
 	parser := &Parser{}
-	classAsts, err := parser.Parse(*path)
+	classAsts, err := parser.Parse(path)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	err = symbolTable.buildSymbolTables(classAsts)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	err = SymbolExistenceChecker(classAsts)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	err = typeChecker(classAsts)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	err = methodReturnAnalysisOnClasses(classAsts)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	err = generateCodes(classAsts)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }

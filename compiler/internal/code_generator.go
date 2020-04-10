@@ -1,7 +1,8 @@
-package compiler
+package internal
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 )
 
@@ -17,19 +18,24 @@ func generateCodes(classAsts []*ClassAst) error {
 	return nil
 }
 
-func (classAst *ClassAst) generateCode() error {
+func (classAst *ClassAst) generateCode() (err error) {
+	classAst.writer, err = os.Create(fmt.Sprintf("%s/%s.vm", classAst.path, classAst.className))
+	if err != nil {
+		return
+	}
 	for _, variable := range classAst.classVariables {
 		if variable.FieldTP == ClassFieldType {
 			classAst.generateCodeForClassVariable(variable)
 		}
 	}
 	for _, method := range classAst.classFuncOrMethod {
-		err := classAst.generateMethodCode(method)
+		err = classAst.generateMethodCode(method)
 		if err != nil {
-			return err
+			return
 		}
 	}
-	return nil
+	err = classAst.saveVMCode()
+	return
 }
 
 func (classAst *ClassAst) generateCodeForClassVariable(variable *ClassVariableAst) {
@@ -392,4 +398,8 @@ func (classAst *ClassAst) writeOutput(output string) {
 		}
 		i += l
 	}
+}
+
+func (classAst *ClassAst) saveVMCode() error {
+	return classAst.writer.Close()
 }

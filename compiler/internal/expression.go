@@ -1,6 +1,8 @@
-package compiler
+package internal
 
-import "strconv"
+import (
+	"strconv"
+)
 
 func buildExpressionsTree(ops []*OpAst, exprTerms []*ExpressionTerm) *ExpressionAst {
 	if len(ops) == 0 {
@@ -306,58 +308,58 @@ func (parser *Parser) matchOp() bool {
 //       35    52  10    15
 //
 //
-func printExpressionTree(expr *ExpressionAst, width int) {
-	// depth := getTreeDepth(expr)
-	indent := 1
-	printExpressionTreeNode(expr.LeftExpr, indent+2)
-	printExpressionTreeNode(expr.RightExpr, indent+2)
-}
-
-func printExpressionTreeNode(expr interface{}, depth int) {
-	// Todo
-}
-
-func getTreeDepth(expr *ExpressionAst) int {
-	leftTreeDepth := getTreeDepth0(expr.LeftExpr)
-	rightTreeDepth := getTreeDepth0(expr.RightExpr)
-	if leftTreeDepth >= rightTreeDepth {
-		return leftTreeDepth
-	}
-	return rightTreeDepth
-}
-
-func getTreeDepth0(expr interface{}) int {
-	if expr == nil {
-		return 0
-	}
-	_, ok := expr.(*ExpressionAst)
-	if ok {
-		return getTreeDepth2(expr.(*ExpressionAst))
-	}
-	return getTreeDepth1(expr.(*ExpressionTerm))
-}
-
-func getTreeDepth1(term *ExpressionTerm) int {
-	if term == nil {
-		return 0
-	}
-	switch term.Type {
-	case IntegerConstantTermType, CharacterConstantTermType, StringConstantTermType,
-		KeyWordConstantNullTermType, KeyWordConstantTrueTermType, KeyWordConstantThisTermType,
-		KeyWordConstantFalseTermType, VarNameExpressionTermType:
-		return 1
-	case ArrayIndexExpressionTermType:
-	case SubRoutineCallTermType:
-	case SubExpressionTermType:
-	case UnaryTermExpressionTermType:
-
-	}
-	return 0
-}
-
-func getTreeDepth2(expr *ExpressionAst) int {
-	if expr == nil {
-		return 0
-	}
-	return 0
-}
+//func printExpressionTree(expr *ExpressionAst, width int) {
+//	// depth := getTreeDepth(expr)
+//	indent := 1
+//	printExpressionTreeNode(expr.LeftExpr, indent+2)
+//	printExpressionTreeNode(expr.RightExpr, indent+2)
+//}
+//
+//func printExpressionTreeNode(expr interface{}, depth int) {
+//	// Todo
+//}
+//
+//func getTreeDepth(expr *ExpressionAst) int {
+//	leftTreeDepth := getTreeDepth0(expr.LeftExpr)
+//	rightTreeDepth := getTreeDepth0(expr.RightExpr)
+//	if leftTreeDepth >= rightTreeDepth {
+//		return leftTreeDepth
+//	}
+//	return rightTreeDepth
+//}
+//
+//func getTreeDepth0(expr interface{}) int {
+//	if expr == nil {
+//		return 0
+//	}
+//	_, ok := expr.(*ExpressionAst)
+//	if ok {
+//		return getTreeDepth2(expr.(*ExpressionAst))
+//	}
+//	return getTreeDepth1(expr.(*ExpressionTerm))
+//}
+//
+//func getTreeDepth1(term *ExpressionTerm) int {
+//	if term == nil {
+//		return 0
+//	}
+//	switch term.Type {
+//	case IntegerConstantTermType, CharacterConstantTermType, StringConstantTermType,
+//		KeyWordConstantNullTermType, KeyWordConstantTrueTermType, KeyWordConstantThisTermType,
+//		KeyWordConstantFalseTermType, VarNameExpressionTermType:
+//		return 1
+//	case ArrayIndexExpressionTermType:
+//	case SubRoutineCallTermType:
+//	case SubExpressionTermType:
+//	case UnaryTermExpressionTermType:
+//
+//	}
+//	return 0
+//}
+//
+//func getTreeDepth2(expr *ExpressionAst) int {
+//	if expr == nil {
+//		return 0
+//	}
+//	return 0
+//}
