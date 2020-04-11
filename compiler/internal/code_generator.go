@@ -52,7 +52,7 @@ func (classAst *ClassAst) generateMethodCode(method *ClassFuncOrMethodAst) error
 	// But we don't do that, instead, we put this to the caller side, namely, we assume that
 	// When a constructor method is called, we let the caller generate such memory and put
 	// The location of this variable to the first parameter of method.
-	code := fmt.Sprintf("function %s_%s %d", classAst.className, method.FuncName, getFuncLocalParamsLen(method))
+	code := fmt.Sprintf("function %s.%s %d", classAst.className, method.FuncName, getFuncLocalParamsLen(method))
 	classAst.writeOutput(code)
 	classAst.generateStatementsCode(method, method.FuncBody)
 	return nil
@@ -268,7 +268,7 @@ func (classAst *ClassAst) generateExpressionTermCode(method *ClassFuncOrMethodAs
 	case KeyWordConstantThisTermType:
 		classAst.writeOutput("push argument 0")
 	case VarNameExpressionTermType:
-		classAst.generateVarNameCode(method, exprTerm.Value.(*VariableAst).VarName)
+		classAst.generateVarNameCode(method, exprTerm.Value.(string))
 	case ArrayIndexExpressionTermType:
 		classAst.generateArrayIndexCode(method, exprTerm.Value.(*ExpressionAst))
 	case SubRoutineCallTermType:
@@ -287,7 +287,7 @@ func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, cal
 		// Because String.new will allocate memory.
 		// So we treat it special here.
 	} else if funcDesc.FuncSymbolDesc.symbolType == ClassConstructorSymbolType {
-		classAst.writeOutput(fmt.Sprintf("PUSH %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
+		classAst.writeOutput(fmt.Sprintf("push %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
 		classAst.writeOutput("call Memory.alloc 1")
 	}
 	if funcDesc.FuncSymbolDesc.symbolType == ClassMethodSymbolType {
@@ -301,7 +301,7 @@ func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, cal
 	if funcDesc.FuncSymbolDesc.symbolType != ClassFuncSymbolType {
 		paramsLen++
 	}
-	classAst.writeOutput(fmt.Sprintf("call %s_%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, paramsLen))
+	classAst.writeOutput(fmt.Sprintf("call %s.%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, paramsLen))
 	// If return type is void. must put a simple POP.
 	if funcDesc.FuncReturnSymbolDesc.returnType.TP == VoidVariableType {
 		classAst.writeOutput("pop constant 0")
@@ -362,7 +362,7 @@ func (classAst *ClassAst) generateOpCode(method *ClassFuncOrMethodAst, op *OpAst
 		classAst.writeOutput("sub")
 	case MultipleOpTP:
 		// If we use a * op, replace it with Math.multiple call.
-		classAst.writeOutput("call Math.multiple 2")
+		classAst.writeOutput("call Math.multiply 2")
 	case DivideOpTP:
 		classAst.writeOutput("call Math.divide 2")
 	case AndOpTP:

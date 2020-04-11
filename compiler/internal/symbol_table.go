@@ -446,6 +446,7 @@ func (classSymbolTable *ClassSymbolTable) buildMethod0(methodAst *ClassFuncOrMet
 		return makeSemanticError("duplicate funcName: %s at class %s", methodName, classSymbolTable.ClassName)
 	}
 	funcSymbolTable := new(FuncSymbolTable)
+	funcSymbolTable.classSymbolTable = classSymbolTable
 	funcSymbolTable.FuncSymbolDesc = &SymbolDesc{
 		classSymbolTable: classSymbolTable,
 		funcSymbolTable:  funcSymbolTable,
