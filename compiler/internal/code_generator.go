@@ -287,7 +287,7 @@ func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, cal
 		// Because String.new will allocate memory.
 		// So we treat it special here.
 	} else if funcDesc.FuncSymbolDesc.symbolType == ClassConstructorSymbolType {
-		classAst.writeOutput(fmt.Sprintf("push %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
+		classAst.writeOutput(fmt.Sprintf("push constant %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
 		classAst.writeOutput("call Memory.alloc 1")
 	}
 	if funcDesc.FuncSymbolDesc.symbolType == ClassMethodSymbolType {
@@ -344,7 +344,7 @@ func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varN
 }
 
 func (classAst *ClassAst) generateConstantStringCode(str string) {
-	classAst.writeOutput(fmt.Sprintf("push %d", len(str)))
+	classAst.writeOutput(fmt.Sprintf("push constant %d", len(str)))
 	classAst.writeOutput("call String.new 1")
 	// use a temp variable to save string object address.
 	classAst.writeOutput("pop temp 1")
