@@ -21,6 +21,7 @@ func (table SymbolTableMap) initStandardLibrary() {
 			{TP: VoidVariableType}, {TP: IntVariableType}, {TP: IntVariableType}, {TP: IntVariableType},
 			{TP: IntVariableType}, {TP: IntVariableType}, {TP: IntVariableType},
 		},
+		[]int{0, 1, 2, 2, 2, 2, 1},
 	)
 	table.addStandardClassFuncs(
 		"String",
@@ -38,6 +39,7 @@ func (table SymbolTableMap) initStandardLibrary() {
 			{TP: VoidVariableType}, {TP: ClassVariableType, Name: "String"}, {TP: VoidVariableType}, {TP: IntVariableType},
 			{TP: VoidVariableType}, {TP: CharVariableType}, {TP: CharVariableType}, {TP: CharVariableType},
 		},
+		[]int{0, 0, 0, 1, 2, 1, 0, 0, 1, 0, 0, 0},
 	)
 	table.addStandardClassFuncs(
 		"Array",
@@ -46,6 +48,7 @@ func (table SymbolTableMap) initStandardLibrary() {
 		[]VariableType{
 			{TP: ClassVariableType, Name: "Array"}, {TP: VoidVariableType},
 		},
+		[]int{1, 0},
 	)
 	table.addStandardClassFuncs(
 		"Output",
@@ -58,6 +61,7 @@ func (table SymbolTableMap) initStandardLibrary() {
 			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
 			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
 		},
+		[]int{0, 2, 1, 1, 1, 0, 0},
 	)
 	table.addStandardClassFuncs(
 		"Screen",
@@ -70,6 +74,7 @@ func (table SymbolTableMap) initStandardLibrary() {
 			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
 			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
 		},
+		[]int{0, 0, 1, 2, 4, 4, 3},
 	)
 	table.addStandardClassFuncs(
 		"Keyboard",
@@ -81,6 +86,7 @@ func (table SymbolTableMap) initStandardLibrary() {
 			{TP: VoidVariableType}, {TP: CharVariableType}, {TP: CharVariableType}, {TP: ClassVariableType, Name: "string"},
 			{TP: IntVariableType},
 		},
+		[]int{0, 0, 0, 1, 1},
 	)
 	table.addStandardClassFuncs(
 		"Memory",
@@ -92,6 +98,7 @@ func (table SymbolTableMap) initStandardLibrary() {
 			{TP: VoidVariableType}, {TP: IntVariableType}, {TP: VoidVariableType}, {TP: ClassVariableType, Name: "Array"},
 			{TP: VoidVariableType},
 		},
+		[]int{0, 1, 2, 1, 1},
 	)
 	table.addStandardClassFuncs(
 		"Sys",
@@ -102,14 +109,17 @@ func (table SymbolTableMap) initStandardLibrary() {
 		[]VariableType{
 			{TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType}, {TP: VoidVariableType},
 		},
+		[]int{0, 0, 1, 1},
 	)
 }
 
-func (table SymbolTableMap) addStandardClassFuncs(className string, funcNames []string, funcTypes []SymbolType, returnTP []VariableType) {
+func (table SymbolTableMap) addStandardClassFuncs(className string, funcNames []string, funcTypes []SymbolType,
+	returnTP []VariableType, paramSize []int) {
 	classSymbolTable := &ClassSymbolTable{ClassName: className, FuncSymbolTable: map[string]*FuncSymbolTable{}}
 	for i, funName := range funcNames {
 		fn := &FuncSymbolTable{
-			classSymbolTable: classSymbolTable,
+			classSymbolTable:     classSymbolTable,
+			FuncParamsSymbolDesc: make([]*SymbolDesc, paramSize[i]),
 		}
 		fnDesc := &SymbolDesc{
 			funcSymbolTable:  fn,

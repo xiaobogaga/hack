@@ -40,7 +40,7 @@ func (classAst *ClassAst) generateCode() (err error) {
 
 func (classAst *ClassAst) generateCodeForClassVariable(variable *ClassVariableAst) {
 	classVariable := symbolTable.lookUpClassVar(classAst.className, variable.VariableName)
-	classAst.writeOutput(fmt.Sprintf("PUSH STATIC %d", classVariable.index))
+	classAst.writeOutput(fmt.Sprintf("push static %d", classVariable.index))
 }
 
 // Generate func method vm code.
@@ -114,39 +114,39 @@ func (classAst ClassAst) generateSaveToVariableCode(method *ClassFuncOrMethodAst
 	if variable.ArrayIndex != nil {
 		switch varSymbol.symbolType {
 		case ClassStaticVariableSymbolType:
-			classAst.writeOutput(fmt.Sprintf("PUSH STATIC %d", varSymbol.index))
+			classAst.writeOutput(fmt.Sprintf("push static %d", varSymbol.index))
 		case ClassVariableSymbolType:
 			// If this variable name is a class variable. then it must be a variable of current class.
 			// Then we can get the variable address from the first parameter of current method.
-			classAst.writeOutput("PUSH ARGUMENT 0")
-			classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", varSymbol.index))
-			classAst.writeOutput("ADD")
+			classAst.writeOutput("push argument 0")
+			classAst.writeOutput(fmt.Sprintf("push constant %d", varSymbol.index))
+			classAst.writeOutput("add")
 		case FuncParamType:
-			classAst.writeOutput(fmt.Sprintf("PUSH ARGUMENT %d", varSymbol.index))
+			classAst.writeOutput(fmt.Sprintf("push argument %d", varSymbol.index))
 		case FuncVariableType:
-			classAst.writeOutput(fmt.Sprintf("PUSH LOCAL %d", varSymbol.index))
+			classAst.writeOutput(fmt.Sprintf("push local %d", varSymbol.index))
 		}
 		classAst.generateExpressionCode(method, variable.ArrayIndex)
-		classAst.writeOutput("ADD")
-		classAst.writeOutput("POP POINTER 1")
-		classAst.writeOutput("POP THAT 1")
+		classAst.writeOutput("add")
+		classAst.writeOutput("pop pointer 1")
+		classAst.writeOutput("pop that 1")
 		return
 	}
 	switch varSymbol.symbolType {
 	case ClassStaticVariableSymbolType:
-		classAst.writeOutput(fmt.Sprintf("POP STATIC %d", varSymbol.index))
+		classAst.writeOutput(fmt.Sprintf("pop static %d", varSymbol.index))
 	case ClassVariableSymbolType:
 		// If this variable name is a class variable. then it must be a variable of current class.
 		// Then we can get the variable address from the first parameter of current method.
-		classAst.writeOutput("PUSH ARGUMENT 0")
-		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", varSymbol.index))
-		classAst.writeOutput("ADD")
-		classAst.writeOutput("POP POINTER 0")
-		classAst.writeOutput("POP THIS 0")
+		classAst.writeOutput("push argument 0")
+		classAst.writeOutput(fmt.Sprintf("push constant %d", varSymbol.index))
+		classAst.writeOutput("add")
+		classAst.writeOutput("pop pointer 0")
+		classAst.writeOutput("pop this 0")
 	case FuncParamType:
-		classAst.writeOutput(fmt.Sprintf("POP ARGUMENT %d", varSymbol.index))
+		classAst.writeOutput(fmt.Sprintf("pop argument %d", varSymbol.index))
 	case FuncVariableType:
-		classAst.writeOutput(fmt.Sprintf("POP LOCAL %d", varSymbol.index))
+		classAst.writeOutput(fmt.Sprintf("pop local %d", varSymbol.index))
 	}
 }
 
@@ -164,12 +164,12 @@ func (classAst *ClassAst) generateIfStatementCode(method *ClassFuncOrMethodAst, 
 	// Generate if, else code.
 	ifStatementLabel, exitStatementLabel := fmt.Sprintf("if_%d", conditionLabel), fmt.Sprintf("if_exit_%d", conditionLabel+1)
 	conditionLabel += 2
-	classAst.writeOutput("IF-GOTO " + ifStatementLabel)
+	classAst.writeOutput("if-goto " + ifStatementLabel)
 	classAst.generateStatementsCode(method, ifStatement.ElseStatements)
-	classAst.writeOutput("GOTO " + exitStatementLabel)
-	classAst.writeOutput("Label " + ifStatementLabel)
+	classAst.writeOutput("goto " + exitStatementLabel)
+	classAst.writeOutput("label " + ifStatementLabel)
 	classAst.generateStatementsCode(method, ifStatement.IfTrueStatements)
-	classAst.writeOutput("Label " + exitStatementLabel)
+	classAst.writeOutput("label " + exitStatementLabel)
 }
 
 // Label while_check_label
@@ -186,14 +186,14 @@ func (classAst *ClassAst) generateWhileStatementCode(method *ClassFuncOrMethodAs
 	whileCheckLabel, exitLabel, statementsLabel := fmt.Sprintf("while_check_%d", conditionLabel), fmt.Sprintf("while_exit_%d", conditionLabel+1),
 		fmt.Sprintf("while_statements_%d", conditionLabel)
 	conditionLabel += 3
-	classAst.writeOutput("Label " + whileCheckLabel)
+	classAst.writeOutput("label " + whileCheckLabel)
 	classAst.generateExpressionCode(method, whileStatement.Condition)
-	classAst.writeOutput("IF-GOTO " + statementsLabel) // If
-	classAst.writeOutput("GOTO " + exitLabel)
-	classAst.writeOutput("Label " + statementsLabel)
+	classAst.writeOutput("if-goto " + statementsLabel) // If
+	classAst.writeOutput("goto " + exitLabel)
+	classAst.writeOutput("label " + statementsLabel)
 	classAst.generateStatementsCode(method, whileStatement.Statements)
-	classAst.writeOutput("GOTO " + whileCheckLabel)
-	classAst.writeOutput("Label " + exitLabel)
+	classAst.writeOutput("goto " + whileCheckLabel)
+	classAst.writeOutput("label " + exitLabel)
 }
 
 func (classAst *ClassAst) generateDoStatementCode(method *ClassFuncOrMethodAst, statement *StatementAst) {
@@ -254,19 +254,19 @@ func (classAst *ClassAst) generateExpressionTermOrExpressionCode(method *ClassFu
 func (classAst *ClassAst) generateExpressionTermCode(method *ClassFuncOrMethodAst, exprTerm *ExpressionTerm) {
 	switch exprTerm.Type {
 	case IntegerConstantTermType:
-		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", exprTerm.Value.(int)))
+		classAst.writeOutput(fmt.Sprintf("push constant %d", exprTerm.Value.(int)))
 	case CharacterConstantTermType:
 		v, _ := strconv.Atoi(exprTerm.Value.(string))
-		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", v))
+		classAst.writeOutput(fmt.Sprintf("push constant %d", v))
 	case StringConstantTermType:
 		classAst.generateConstantStringCode(exprTerm.Value.(string))
 	case KeyWordConstantFalseTermType, KeyWordConstantNullTermType:
-		classAst.writeOutput("PUSH CONSTANT 0")
+		classAst.writeOutput("push constant 0")
 	case KeyWordConstantTrueTermType:
-		classAst.writeOutput("PUSH CONSTANT 1")
-		classAst.writeOutput("NEG")
+		classAst.writeOutput("push constant 1")
+		classAst.writeOutput("neg")
 	case KeyWordConstantThisTermType:
-		classAst.writeOutput("PUSH ARGUMENT 0")
+		classAst.writeOutput("push argument 0")
 	case VarNameExpressionTermType:
 		classAst.generateVarNameCode(method, exprTerm.Value.(*VariableAst).VarName)
 	case ArrayIndexExpressionTermType:
@@ -288,7 +288,7 @@ func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, cal
 		// So we treat it special here.
 	} else if funcDesc.FuncSymbolDesc.symbolType == ClassConstructorSymbolType {
 		classAst.writeOutput(fmt.Sprintf("PUSH %d", symbolTable.lookUpClass(funcDesc.classSymbolTable.ClassName).ClassVariableIndex))
-		classAst.writeOutput("CALL Memory.alloc 1")
+		classAst.writeOutput("call Memory.alloc 1")
 	}
 	if funcDesc.FuncSymbolDesc.symbolType == ClassMethodSymbolType {
 		// Push the base memory address of the caller to stack.
@@ -301,10 +301,10 @@ func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, cal
 	if funcDesc.FuncSymbolDesc.symbolType != ClassFuncSymbolType {
 		paramsLen++
 	}
-	classAst.writeOutput(fmt.Sprintf("CALL %s_%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, paramsLen))
+	classAst.writeOutput(fmt.Sprintf("call %s_%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, paramsLen))
 	// If return type is void. must put a simple POP.
 	if funcDesc.FuncReturnSymbolDesc.returnType.TP == VoidVariableType {
-		classAst.writeOutput("POP CONSTANT 0")
+		classAst.writeOutput("pop constant 0")
 	}
 }
 
@@ -312,73 +312,73 @@ func (classAst *ClassAst) generateArrayIndexCode(method *ClassFuncOrMethodAst, e
 	arrayVarName := expr.LeftExpr.(*ExpressionTerm)
 	classAst.generateExpressionTermCode(method, arrayVarName)
 	classAst.generateExpressionCode(method, expr.RightExpr.(*ExpressionAst))
-	classAst.writeOutput("ADD")
-	classAst.writeOutput("POP POINTER 1")
-	classAst.writeOutput("PUSH THAT 1")
+	classAst.writeOutput("add")
+	classAst.writeOutput("pop pointer 1")
+	classAst.writeOutput("push that 1")
 }
 
 func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varName string) {
 	if varName == "" || varName == "this" {
 		// Then put the address of current object to stack.
-		classAst.writeOutput("PUSH ARGUMENT 0")
+		classAst.writeOutput("push argument 0")
 	}
 	varSymbol, _ := symbolTable.lookUpVarInFunc(classAst.className, method.FuncName, varName)
 	switch varSymbol.symbolType {
 	case ClassStaticVariableSymbolType:
-		classAst.writeOutput(fmt.Sprintf("PUSH STATIC %d", varSymbol.index))
+		classAst.writeOutput(fmt.Sprintf("push static %d", varSymbol.index))
 	case ClassVariableSymbolType:
 		// If this variable name is a class variable. then it must be a variable of current class.
 		// Then we can get the variable from the first parameter of current method.
 		// What if this variable is a class object, we must get
-		classAst.writeOutput("PUSH ARGUMENT 0")
-		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", varSymbol.index))
-		classAst.writeOutput("ADD")
-		classAst.writeOutput("POP POINTER 0")
-		classAst.writeOutput("PUSH THIS 0")
+		classAst.writeOutput("push argument 0")
+		classAst.writeOutput(fmt.Sprintf("push constant %d", varSymbol.index))
+		classAst.writeOutput("add")
+		classAst.writeOutput("pop pointer 0")
+		classAst.writeOutput("push this 0")
 	case FuncParamType:
-		classAst.writeOutput(fmt.Sprintf("PUSH ARGUMENT %d", varSymbol.index))
+		classAst.writeOutput(fmt.Sprintf("push argument %d", varSymbol.index))
 	case FuncVariableType:
-		classAst.writeOutput(fmt.Sprintf("PUSH LOCAL %d", varSymbol.index))
+		classAst.writeOutput(fmt.Sprintf("push local %d", varSymbol.index))
 	}
 }
 
 func (classAst *ClassAst) generateConstantStringCode(str string) {
-	classAst.writeOutput(fmt.Sprintf("PUSH %d", len(str)))
-	classAst.writeOutput("CALL String.new 1")
+	classAst.writeOutput(fmt.Sprintf("push %d", len(str)))
+	classAst.writeOutput("call String.new 1")
 	// use a temp variable to save string object address.
-	classAst.writeOutput("POP TEMP 0")
+	classAst.writeOutput("pop temp 0")
 	for _, character := range str {
-		classAst.writeOutput("PUSH TEMP 0")
-		classAst.writeOutput(fmt.Sprintf("PUSH CONSTANT %d", character))
-		classAst.writeOutput("CALL String.appendChar 2")
+		classAst.writeOutput("push temp 0")
+		classAst.writeOutput(fmt.Sprintf("push constant %d", character))
+		classAst.writeOutput("call String.appendChar 2")
 	}
 }
 
 func (classAst *ClassAst) generateOpCode(method *ClassFuncOrMethodAst, op *OpAst) {
 	switch op.Op {
 	case AddOpTP:
-		classAst.writeOutput("ADD")
+		classAst.writeOutput("add")
 	case MinusOpTP:
-		classAst.writeOutput("SUB")
+		classAst.writeOutput("sub")
 	case MultipleOpTP:
 		// If we use a * op, replace it with Math.multiple call.
-		classAst.writeOutput("CALL Math.multiple 2")
+		classAst.writeOutput("call Math.multiple 2")
 	case DivideOpTP:
-		classAst.writeOutput("CALL Math.divide 2")
+		classAst.writeOutput("call Math.divide 2")
 	case AndOpTP:
-		classAst.writeOutput("AND")
+		classAst.writeOutput("and")
 	case OrOpTP:
-		classAst.writeOutput("OR")
+		classAst.writeOutput("or")
 	case LessOpTP:
-		classAst.writeOutput("LT")
+		classAst.writeOutput("lt")
 	case GreaterOpTP:
-		classAst.writeOutput("GT")
+		classAst.writeOutput("gt")
 	case EqualOpTp:
-		classAst.writeOutput("EQ")
+		classAst.writeOutput("eq")
 	case ArrayIndexOpTP:
-		classAst.writeOutput("ADD")
-		classAst.writeOutput("POP POINTER 1")
-		classAst.writeOutput("PUSH THAT 1")
+		classAst.writeOutput("add")
+		classAst.writeOutput("pop pointer 1")
+		classAst.writeOutput("push that 1")
 	}
 }
 
@@ -388,9 +388,9 @@ func (classAst *ClassAst) generateUnaryOpCode(method *ClassFuncOrMethodAst, op *
 	}
 	switch op.Op {
 	case NegationOpTP:
-		classAst.writeOutput("NEG")
+		classAst.writeOutput("neg")
 	case BooleanNegationOpTP:
-		classAst.writeOutput("NOT")
+		classAst.writeOutput("not")
 	}
 }
 
@@ -406,6 +406,6 @@ func (classAst *ClassAst) writeOutput(output string) {
 }
 
 func (classAst *ClassAst) saveVMCode() error {
-	println("save vm file: %s/%s.vm", classAst.path, classAst.className)
+	fmt.Printf("save vm file: %s/%s.vm\n", classAst.path, classAst.className)
 	return classAst.writer.Close()
 }
