@@ -129,7 +129,7 @@ func (classAst ClassAst) generateSaveToVariableCode(method *ClassFuncOrMethodAst
 		classAst.generateExpressionCode(method, variable.ArrayIndex)
 		classAst.writeOutput("add")
 		classAst.writeOutput("pop pointer 1")
-		classAst.writeOutput("pop that 1")
+		classAst.writeOutput("pop that 0")
 		return
 	}
 	switch varSymbol.symbolType {
@@ -314,7 +314,7 @@ func (classAst *ClassAst) generateArrayIndexCode(method *ClassFuncOrMethodAst, e
 	classAst.generateExpressionCode(method, expr.RightExpr.(*ExpressionAst))
 	classAst.writeOutput("add")
 	classAst.writeOutput("pop pointer 1")
-	classAst.writeOutput("push that 1")
+	classAst.writeOutput("push that 0")
 }
 
 func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varName string) {
@@ -347,9 +347,9 @@ func (classAst *ClassAst) generateConstantStringCode(str string) {
 	classAst.writeOutput(fmt.Sprintf("push constant %d", len(str)))
 	classAst.writeOutput("call String.new 1")
 	// use a temp variable to save string object address.
-	classAst.writeOutput("pop temp 1")
+	// classAst.writeOutput("pop temp 1")
 	for _, character := range str {
-		classAst.writeOutput("push temp 1")
+		// classAst.writeOutput("push temp 1")
 		classAst.writeOutput(fmt.Sprintf("push constant %d", character))
 		classAst.writeOutput("call String.appendChar 2")
 	}
@@ -379,7 +379,7 @@ func (classAst *ClassAst) generateOpCode(method *ClassFuncOrMethodAst, op *OpAst
 	case ArrayIndexOpTP:
 		classAst.writeOutput("add")
 		classAst.writeOutput("pop pointer 1")
-		classAst.writeOutput("push that 1")
+		classAst.writeOutput("push that 0")
 	}
 }
 
