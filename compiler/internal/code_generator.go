@@ -162,7 +162,7 @@ func (classAst *ClassAst) generateIfStatementCode(method *ClassFuncOrMethodAst, 
 	ifStatement := statement.Statement.(*IfStatementAst)
 	classAst.generateExpressionCode(method, ifStatement.Condition)
 	// Generate if, else code.
-	ifStatementLabel, exitStatementLabel := fmt.Sprintf("if_%d", conditionLabel), fmt.Sprintf("if_exit_%d", conditionLabel+1)
+	ifStatementLabel, exitStatementLabel := fmt.Sprintf("if$_%d", conditionLabel), fmt.Sprintf("if$_exit_%d", conditionLabel+1)
 	conditionLabel += 2
 	classAst.writeOutput("if-goto " + ifStatementLabel)
 	classAst.generateStatementsCode(method, ifStatement.ElseStatements)
@@ -183,8 +183,8 @@ func (classAst *ClassAst) generateIfStatementCode(method *ClassFuncOrMethodAst, 
 // false, null is 0 and true is -1. IF-GOTO jumps to label when the top value is not zero.
 func (classAst *ClassAst) generateWhileStatementCode(method *ClassFuncOrMethodAst, statement *StatementAst) {
 	whileStatement := statement.Statement.(*WhileStatementAst)
-	whileCheckLabel, exitLabel, statementsLabel := fmt.Sprintf("while_check_%d", conditionLabel), fmt.Sprintf("while_exit_%d", conditionLabel+1),
-		fmt.Sprintf("while_statements_%d", conditionLabel)
+	whileCheckLabel, exitLabel, statementsLabel := fmt.Sprintf("while$_check_%d", conditionLabel), fmt.Sprintf("while$_exit_%d", conditionLabel+1),
+		fmt.Sprintf("while$_statements_%d", conditionLabel+2)
 	conditionLabel += 3
 	classAst.writeOutput("label " + whileCheckLabel)
 	classAst.generateExpressionCode(method, whileStatement.Condition)
@@ -304,7 +304,7 @@ func (classAst *ClassAst) generateFuncCallCode(method *ClassFuncOrMethodAst, cal
 	classAst.writeOutput(fmt.Sprintf("call %s.%s %d", funcDesc.classSymbolTable.ClassName, funcDesc.FuncSymbolDesc.name, paramsLen))
 	// If return type is void. must put a simple POP.
 	if funcDesc.FuncReturnSymbolDesc.returnType.TP == VoidVariableType {
-		classAst.writeOutput("pop constant 0")
+		classAst.writeOutput("pop temp 0")
 	}
 }
 
@@ -321,6 +321,7 @@ func (classAst *ClassAst) generateVarNameCode(method *ClassFuncOrMethodAst, varN
 	if varName == "" || varName == "this" {
 		// Then put the address of current object to stack.
 		classAst.writeOutput("push argument 0")
+		return
 	}
 	varSymbol, _ := symbolTable.lookUpVarInFunc(classAst.className, method.FuncName, varName)
 	switch varSymbol.symbolType {
@@ -346,9 +347,9 @@ func (classAst *ClassAst) generateConstantStringCode(str string) {
 	classAst.writeOutput(fmt.Sprintf("push %d", len(str)))
 	classAst.writeOutput("call String.new 1")
 	// use a temp variable to save string object address.
-	classAst.writeOutput("pop temp 0")
+	classAst.writeOutput("pop temp 1")
 	for _, character := range str {
-		classAst.writeOutput("push temp 0")
+		classAst.writeOutput("push temp 1")
 		classAst.writeOutput(fmt.Sprintf("push constant %d", character))
 		classAst.writeOutput("call String.appendChar 2")
 	}
