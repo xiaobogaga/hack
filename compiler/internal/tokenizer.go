@@ -404,6 +404,7 @@ func (tokenizer *Tokenizer) parseLine(line []byte) (error, bool) {
 		}
 		switch token.tp {
 		case MultipleLineOpenCommentTP:
+			// We already has /* just need to find a match */
 			match := tokenizer.lookForwardForMatchingMultipleLineCommentAtCurrentLine(line)
 			if !match {
 				return nil, false

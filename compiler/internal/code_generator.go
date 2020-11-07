@@ -39,8 +39,8 @@ func (classAst *ClassAst) generateCode() (err error) {
 }
 
 func (classAst *ClassAst) generateCodeForClassVariable(variable *ClassVariableAst) {
-	classVariable := symbolTable.lookUpClassVar(classAst.className, variable.VariableName)
-	classAst.writeOutput(fmt.Sprintf("push static %d", classVariable.index))
+	// classVariable := symbolTable.lookUpClassVar(classAst.className, variable.VariableName)
+	//classAst.writeOutput(fmt.Sprintf("push static %d", classVariable.index))
 }
 
 // Generate func method vm code.

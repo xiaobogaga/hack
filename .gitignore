@@ -1,0 +1,9 @@
+*.vm
+.DS_Store
+.idea
+compiler/compiler
+compiler/test
+vmtranslator/.DS_Store
+vmtranslator/07
+vmtranslator/08
+vmtranslator/vmtranslator

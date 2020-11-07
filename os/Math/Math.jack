@@ -1,0 +1,36 @@
+// A simple Math implementation.
+
+class Math {
+
+    function void init() {
+
+    }
+
+    function int abs(int x) 【
+        if (x < 0) return -x;
+        return x;
+    }
+
+    function int multiply(int x, int y) {
+
+    }
+
+    function int divide(int x, int y) {
+
+    }
+
+    function int min(int x, int y) {
+        if (x < y) return x;
+        return y;
+    }
+
+    function int max(int x, int y) {
+        if (x < y) return y;
+        return x;
+    }
+
+    function int sqrt(int x) {
+
+    }
+
+}

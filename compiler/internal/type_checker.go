@@ -1,9 +1,5 @@
 package internal
 
-//******************************************************//
-//     existence checking                               //
-//                          existence checking          //
-//******************************************************//
 func SymbolExistenceChecker(ast []*ClassAst) error {
 	for _, classAst := range ast {
 		err := classAst.existenceCheck()
@@ -296,10 +292,6 @@ func (classAst *ClassAst) checkVarExpressionExistence(ast *ClassFuncOrMethodAst,
 	return classAst.checkVariableExistenceInExpression(ast, variable.ArrayIndex)
 }
 
-//********************************************************************************//
-//                     type                      type                             //
-//                               checking                        checking         //
-//********************************************************************************//
 func typeChecker(ast []*ClassAst) error {
 	for _, classAst := range ast {
 		err := classAst.typeChecker0()
@@ -368,7 +360,7 @@ func (classAst *ClassAst) typeCheckIfStatement(methodAst *ClassFuncOrMethodAst, 
 	if err != nil {
 		return err
 	}
-	if !classAst.checkMatch1(&VariableType{TP: BooleanVariableType,}, t) {
+	if !classAst.checkMatch1(&VariableType{TP: BooleanVariableType}, t) {
 		return makeSemanticError("expected %s but %+v at %s.%s", "bool", t, classAst.className, methodAst.FuncName)
 	}
 	err = classAst.typeCheckStatements(methodAst, ast.IfTrueStatements)
@@ -383,7 +375,7 @@ func (classAst *ClassAst) typeCheckWhileStatement(methodAst *ClassFuncOrMethodAs
 	if err != nil {
 		return err
 	}
-	if !classAst.checkMatch1(&VariableType{TP: BooleanVariableType,}, t) {
+	if !classAst.checkMatch1(&VariableType{TP: BooleanVariableType}, t) {
 		return makeSemanticError("expected %s but %+v at %s.%s", "bool", t, classAst.className, methodAst.FuncName)
 	}
 	return classAst.typeCheckStatements(methodAst, ast.Statements)
@@ -509,7 +501,7 @@ func (classAst *ClassAst) checkMatch0(methodAst *ClassFuncOrMethodAst, l, r *Var
 			return nil, makeSemanticError("type %+v doesn't support array index at %s.%s", r, classAst.className, methodAst.FuncName)
 		}
 		// Todo: what type should I return here.
-		return &VariableType{TP: IntVariableType,}, nil
+		return &VariableType{TP: IntVariableType}, nil
 	}
 	// Otherwise l and r should be both a integer compatible type
 	if !isIntegerCompatibleType(l) || !isIntegerCompatibleType(r) {
@@ -618,10 +610,6 @@ func (classAst *ClassAst) checkTypeMatchOnUnaryOp(methodAst *ClassFuncOrMethodAs
 	return nil
 }
 
-//********************************************************************************//
-//                     return                      return                         //
-//                               analysis                        analysis         //
-//********************************************************************************//
 func methodReturnAnalysisOnClasses(asts []*ClassAst) error {
 	for _, ast := range asts {
 		err := ast.methodReturnAnalysis()
@@ -679,7 +667,7 @@ func (classAst *ClassAst) ifElseReturnAnalysis(method *ClassFuncOrMethodAst, ifA
 //	if {
 //    return
 //  }
-// }
+// } (this is not a full-returned-if-else)
 // Or
 // func fName() {
 //	if {
