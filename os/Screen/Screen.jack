@@ -1,0 +1,127 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Screen.jack
+
+/**
+ * A library of functions for displaying graphics on the screen.
+ * The Hack physical screen consists of 512 rows (indexed 0..511, top to bottom)
+ * of 256 pixels each (indexed 0..255, left to right). The top left pixel on
+ * the screen is indexed (0,0).
+ */
+class Screen {
+    static boolean color;
+    static Array bitsMap;
+
+    /** Initializes the Screen. */
+    function void init() {
+        var int i;
+        let bitsMap = Array.new(16);
+        let bitsMap[0] = 1;
+        let i = 1;
+        while (i < 16) {
+            let bitsMap[i] = bitsMap[i - 1] * 2;
+            let i = i + 1;
+        }
+        return;
+    }
+
+    /** Erases the entire screen. */
+    function void clearScreen() {
+        var int i;
+        var int j;
+        let color = false;
+        let i = 0;
+        while (i < 512) {
+            let j = 0;
+            while (j < 256) {
+                Screen.drawPixel(i, j);
+                let j = j + 1;
+            }
+            let i = i + 1;
+        }
+        return;
+    }
+
+    /** Sets the current color, to be used for all subsequent drawXXX commands.
+     *  Black is represented by true, white by false. */
+    function void setColor(boolean b) {
+        let color = b;
+        return;
+    }
+
+    /** Draws the (x,y) pixel, using the current color. */
+    function void drawPixel(int x, int y) {
+        var int loc;
+        var int value;
+        let loc = Screen.memoryLoc(x, y);
+        let value = Memory.peek(loc);
+        if (color) {
+            let value = value | bitsMap[y - Math.divide(y, 16)];
+        } else {
+            let value = value & (bitsMap[y - Math.divide(y, 16)] - 1);
+        }
+        do Memory.poke(loc, value);
+        return;
+    }
+
+    /** Draws a line from pixel (x1,y1) to pixel (x2,y2), using the current color. */
+    function void drawLine(int x1, int y1, int x2, int y2) {
+        var int dx;
+        var int dy;
+        var int stepX;
+        var int stepY;
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let stepX = 0;
+        let stepY = 0;
+        while ((Math.abs(stepX) < Math.abs(dx) | Math.abs(stepX) = Math.abs(dx)) | (
+            Math.abs(stepY) < Math.abs(dy) | Math.abs(stepY) = Math.abs(dy))) {
+            do Screen.drawPixel(x1 + stepX, y1 + stepY);
+            if Math.abs(stepX * dy) < Math.abs(dx * stepY) {
+                if (dx < 0) {
+                    let stepX = stepX + 1;
+                } else if (dx > 0) {
+                    let stepX = stepX - 1;
+                }
+            } else {
+                if (dy < 0) {
+                    let stepY = stepY + 1;
+                } else {
+                    let stepY = stepY - 1;
+                }
+            }
+        }
+        return;
+    }
+
+    /** Draws a filled rectangle whose top left corner is (x1, y1)
+     * and bottom right corner is (x2,y2), using the current color. */
+    function void drawRectangle(int x1, int y1, int x2, int y2) {
+        var int j;
+        let j = 0;
+        while (j < y2 - y1 + 1) {
+            do Screen.drawLine(x1, y1 + j, x2, y1 + j);
+            let j = j + 1;
+        }
+    }
+
+    /** Draws a filled circle of radius r<=181 around (x,y), using the current color. */
+    function void drawCircle(int x, int y, int r) {
+        var int dy;
+        var int stepX;
+        let dy = -r;
+        while (dy < r) {
+            let stepX = Math.sqrt(r * r - (dy * dy))
+            do Screen.drawLine(x - stepX, y + dy, x + stepX, y - dy);
+            let dy = dy + 1;
+        }
+        return;
+    }
+
+    // Return the memory loc of pix (x, y)
+    function int memoryLoc(int x, int y) {
+        return 16384 + x * 32 + Math.divide(y, 16)
+    }
+
+}

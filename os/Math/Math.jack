@@ -1,36 +1,126 @@
 // A simple Math implementation.
 
 class Math {
-
+    static Array bitsMap;
     function void init() {
-
+        var int i;
+        let i = 1;
+        let bitsMap = Array.new(16);
+        let bitsMap[0] = 1;
+        while (i < 16) {
+            // Cannot use multiply here.
+            let bitsMap[i] = bitsMap[i - 1] + bitsMap[i - 1];
+            let i = i + 1;
+        }
+        let divideMemory = 0;
+        let divideMemory2 = false;
+        return;
     }
 
-    function int abs(int x) 【
-        if (x < 0) return -x;
+    function int abs(int x) {
+        if (x < 0) {
+            return -x;
+        }
         return x;
     }
 
     function int multiply(int x, int y) {
-
+        var int sum;
+        var int i;
+        var int shiftX;
+        let shiftX = x;
+        let sum = 0;
+        let i = 0;
+        if ((y = 0) | (x = 0)) {
+            return 0;
+        }
+        let absY = Math.abs(y);
+        let absX = Math.abs(x);
+        while(i < 16) {
+            if (Math.bit(y, i) = 1) {
+                let sum = sum + shiftX;
+            }
+            let shiftX = shiftX + shiftX;
+            let i = i + 1;
+        }
+        if ((x < 0) & (y < 0)) | ((x > 0) & (y > 0)) {
+            return sum;
+        }
+        return -sum;
     }
 
-    function int divide(int x, int y) {
+    function int bit(int x, int j) {
+        if ((bitsMap[j] & x) = 0) {
+            return 0;
+        }
+        return 1;
+    }
 
+    static int divideMemory;
+    static boolean divideMemory2;
+
+    function int divide(int x, int y) {
+        var int q;
+        var int qy2;
+        if (y > x) {
+            return 0;
+        }
+        let q = divide(x, y + y);
+        if (q = 1) {
+            let qy2 = 0;
+        } else {
+            if (divideMemory2) {
+                let qy2 = divideMemory;
+            } else {
+                let qy2 = divideMemory + y + y;
+            }
+        }
+        // Using memorialize to decrease complexity.
+        if ((x - qy2) < y) {
+            let divideMemory2 = true;
+            let divideMemory = qy2;
+            return q + q;
+        } else {
+            let divideMemory2 = false;
+            let divideMemory = qy2;
+            return q + q + 1;
+        }
     }
 
     function int min(int x, int y) {
-        if (x < y) return x;
+        if (x < y) {
+            return x;
+        }
         return y;
     }
 
     function int max(int x, int y) {
-        if (x < y) return y;
+        if (x < y) {
+            return y;
+        }
         return x;
     }
 
     function int sqrt(int x) {
-
+        var int left;
+        var int right;
+        var int mid;
+        var int temp;
+        let left = 0;
+        let right = x;
+        while (left < right) {
+            let mid = Math.divide(left + right, 2);
+            let temp = Math.multiply(mid, mid);
+            if (temp = x) {
+                return mid;
+            }
+            if (temp < x) {
+                left = mid;
+            } else {
+                right = mid - 1;
+            }
+        }
+        return left;
     }
 
 }

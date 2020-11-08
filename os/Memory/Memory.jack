@@ -1,0 +1,32 @@
+class Memory {
+    var int free;
+    function void init() {
+        let free = 2048;
+        return;
+    }
+
+    function int peek(int address) {
+        var Array a;
+        let a = address;
+        return a[0];
+    }
+
+    // Heap starts with 2048.
+    function void poke(int address, int value) {
+        var Array a;
+        let a = address;
+        let a[0] = value;
+        return;
+    }
+
+    function Array alloc(int size) {
+        var int ret;
+        let free = free + size;
+        return ret;
+    }
+
+    function void deAlloc(Array o) {
+        return;
+    }
+
+}

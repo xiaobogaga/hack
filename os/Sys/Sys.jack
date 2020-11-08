@@ -1,0 +1,40 @@
+class Sys {
+
+    function void init() {
+        do Keyboard.init();
+        do Memory.init();
+        do Array.init();
+        do String.init();
+        do Screen.init();
+        do Math.init();
+        do Output.init();
+        do Main.main();
+        return;
+    }
+
+    function void halt() {
+        while (true) {}
+        return;
+    }
+
+    /** Displays the given error code in the form "ERR<errorCode>",
+     *  and halts the program's execution. */
+    function void error(int errorCode) {
+        do Output.printString("ERR");
+        do Output.printString("<");
+        do Output.printInt(errorCode);
+        do Output.printString(">");
+        do Sys.halt();
+        return;
+    }
+
+    // Maybe we need more steps here.
+    function void wait(int duration) {
+        var int i;
+        while(i < duration) {
+            let i = i + 1;
+        }
+        return;
+    }
+
+}

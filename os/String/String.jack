@@ -1,0 +1,105 @@
+class String {
+    field int curLen;
+    field int maxLen;
+    field Array chars;
+    constructor String new(int maxLength) {
+        let curLen = 0;
+        let maxLen = maxLength;
+        let chars = Array.new(maxLength);
+        return this;
+    }
+
+    method void dispose() {
+        do chars.dispose()
+        return;
+    }
+
+    method int length() {
+        return curLen;
+    }
+
+    method char charAt(int j) {
+        return chars[j];
+    }
+
+    method void setCharAt(int j, char c) {
+        let chars[j] = c;
+        return;
+    }
+
+    method String appendChar(char c) {
+        let chars[curLen] = c;
+        let curLen = curLen + 1;
+        return this;
+    }
+
+    method void eraseLastChar() {
+        if (curLen = 0) {
+            return;
+        }
+        let curLen = curLen - 1;
+        return;
+    }
+
+    method int intValue() {
+        var int i;
+        var int value;
+        let i = 0;
+        let value = 0;
+        while (i < curLen) {
+            if (~String.isNumber(chars[i])) {
+                let i = curLen;
+            } else {
+                let value = Math.multiply(value, 10) + chars[i];
+                let i = i + 1;
+            }
+        }
+        return value;
+    }
+
+    method void setInt(int j) {
+        var int len;
+        var int i;
+        var int temp1;
+        var int temp2;
+        let len = String.intLen(j);
+        let i = len - 1;
+        let curLen = 0;
+        while (j != 0) {
+            let temp2 = Math.divide(j, 10);
+            let temp1 = j - temp2;
+            let j = temp2;
+            let chars[i] = temp1;
+            let curLen ++;
+            let i = i - 1;
+        }
+        return;
+    }
+
+    function int intLen(int j) {
+        var int ret;
+        while (j != 0) {
+            let j = Math.divide(j, 10);
+            let ret = ret + 1;
+        }
+        return ret;
+    }
+
+    function char backSpace() {
+        return 129;
+    }
+
+    function char doubleQuote() {
+        return 34;
+    }
+
+    function char newLine() {
+        return 128;
+    }
+
+    function boolean isNumber(char c) {
+        var int v;
+        let v = c - 48
+        return (v >= 48) && (v <= 57);
+    }
+}
