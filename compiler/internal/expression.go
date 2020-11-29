@@ -6,10 +6,10 @@ import (
 
 func buildExpressionsTree(ops []*OpAst, exprTerms []*ExpressionTerm) *ExpressionAst {
 	if len(ops) == 0 {
-		return &ExpressionAst{LeftExpr: exprTerms[0],}
+		return &ExpressionAst{LeftExpr: exprTerms[0]}
 	}
 	if len(ops) == 1 {
-		return &ExpressionAst{LeftExpr: exprTerms[0], Op: ops[0], RightExpr: exprTerms[1],}
+		return &ExpressionAst{LeftExpr: exprTerms[0], Op: ops[0], RightExpr: exprTerms[1]}
 	}
 	expressionStack := make([]interface{}, 0, len(exprTerms))
 	for _, exprTerm := range exprTerms {
@@ -212,6 +212,9 @@ func (parser *Parser) parseSubExpressionTerm() (*ExpressionTerm, error) {
 	}, nil
 }
 
+// Note: for expession, 5 + -2, our compiler won't generate error. Actually it will be better
+// if compiler tells user must to use 5 + (-2), however, it turns out mysql and c programming language
+// both accepts 5 + -2.
 func (parser *Parser) parseNegationExpressionTerm() (*ExpressionTerm, error) {
 	if !parser.hasRemainTokens() {
 		return nil, parser.makeError(false)

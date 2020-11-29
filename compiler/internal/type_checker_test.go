@@ -3,8 +3,9 @@ package internal
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func initTestData(t *testing.T) {
@@ -74,8 +75,7 @@ func TestTypeChecker_classVariableExistenceCheck(t *testing.T) {
 		expectErr   bool
 	}{
 		{
-			fileContent:
-			`
+			fileContent: `
 				class Test {
 					field int a;
 					field Test1 t1;
@@ -85,8 +85,7 @@ func TestTypeChecker_classVariableExistenceCheck(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			fileContent:
-			`
+			fileContent: `
 				class Test {
 					field int a;
 					field Test1 t1;
@@ -128,8 +127,7 @@ func TestTypeChecker_funcVariablesExistenceCheck(t *testing.T) {
 		expectErr   bool
 	}{
 		{
-			fileContent:
-			`
+			fileContent: `
 				class Test {
 					field int a1;
 					static char c1;
