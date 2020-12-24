@@ -15,21 +15,37 @@ func buildExpressionsTree(ops []*OpAst, exprTerms []*ExpressionTerm) *Expression
 	for _, exprTerm := range exprTerms {
 		expressionStack = append(expressionStack, exprTerm)
 	}
-	for i := 2; len(expressionStack) > 2; i = i % len(expressionStack) {
-		nextOp := ops[i-1]
-		lastOp := ops[i-2]
-		if lastOp.priority >= nextOp.priority {
-			// We can merge last two expression to a new expression node.
-			lastLeftExpression, lastRightExpression := expressionStack[i-2], expressionStack[i-1]
-			newExpr := makeNewExpression(lastLeftExpression, lastRightExpression, lastOp)
-			expressionStack = append(expressionStack[:i-1], expressionStack[i:]...)
-			expressionStack[i-2] = newExpr
-			ops = append(ops[:i-2], ops[i-1:]...)
-			continue
-		}
-		i++
+	//for i := 0; len(ops) > 1; i = i % len(ops) {
+	//	nextOp := ops[i + 1]
+	//	lastOp := ops[i]
+	//	if lastOp.priority >= nextOp.priority {
+	//		// We can merge last two expression to a new expression node.
+	//		lastLeftExpression, lastRightExpression := expressionStack[i], expressionStack[i+1]
+	//		newExpr := makeNewExpression(lastLeftExpression, lastRightExpression, lastOp)
+	//		expressionStack = append(expressionStack[:i+1], expressionStack[i:]...)
+	//		expressionStack[i] = newExpr
+	//		ops = append(ops[:i], ops[i+1:]...)
+	//		continue
+	//	}
+	//	i++
+	//}
+	//return makeNewExpression(expressionStack[0], expressionStack[1], ops[0])
+	return buildExpressionsTree0(ops, expressionStack)
+}
+
+func buildExpressionsTree0(ops []*OpAst, exprTerms []interface{}) *ExpressionAst {
+	if len(ops) == 1 {
+		return makeNewExpression(exprTerms[0], exprTerms[1], ops[0])
 	}
-	return makeNewExpression(expressionStack[0], expressionStack[1], ops[0])
+	lastOp := ops[0]
+	nextOp := ops[1]
+	if lastOp.priority >= nextOp.priority {
+		newExpr := makeNewExpression(exprTerms[0], exprTerms[1], lastOp)
+		exprTerms[1] = newExpr
+		return buildExpressionsTree0(ops[1:], exprTerms[1:])
+	}
+	expr := buildExpressionsTree0(ops[1:], exprTerms[1:])
+	return makeNewExpression(exprTerms[0], expr, lastOp)
 }
 
 func makeNewExpression(leftExpr interface{}, rightExpr interface{}, op *OpAst) *ExpressionAst {
@@ -259,16 +275,16 @@ func (parser *Parser) parseOpAst() (*OpAst, error) {
 		op.priority = 1
 	case MultiplyTP:
 		op.Op = MultipleOpTP
-		op.priority = 1
+		op.priority = 2
 	case DivideTP:
 		op.Op = DivideOpTP
-		op.priority = 1
+		op.priority = 2
 	case AndTP:
 		op.Op = AndOpTP
-		op.priority = 1
+		op.priority = 0
 	case OrTP:
 		op.Op = OrOpTP
-		op.priority = 1
+		op.priority = 0
 	case GreaterTP:
 		op.Op = GreaterOpTP
 		op.priority = 1

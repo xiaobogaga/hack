@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -24,6 +25,7 @@ func TestParser_ParseExpression(t *testing.T) {
 		{Content: "a.b(c[1] + d.e(f)) + g[i * j.l(m)] + h"},
 		{Content: "b(c, e) + f"},
 		{Content: "(a + b + (c * (a + (b)))) * c + (a * (a + b))"},
+		{Content: "a = 1 & c = 2"},
 	}
 	tokenizer := &Tokenizer{}
 	parser := &Parser{}
@@ -37,8 +39,20 @@ func TestParser_ParseExpression(t *testing.T) {
 		ast, err := parser.parseExpression()
 		assert.Nil(t, err, data)
 		// fmt.Printf("%+v\n", ast)
+		printExprAst(ast)
 		assert.NotNil(t, ast)
 	}
+}
+
+func printExprAst(ast *ExpressionAst) {
+	if ast == nil {
+		return
+	}
+	data, err := json.MarshalIndent(ast, "", "\t")
+	if err != nil {
+		panic(err)
+	}
+	println(string(data))
 }
 
 func TestParser_ParseReturnStatement(t *testing.T) {
