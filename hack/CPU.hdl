@@ -1,0 +1,39 @@
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+    // Put your code here:
+    Not(in=instruction[15], out=isAInstruction);
+    Or(a=isAInstruction, b=instruction[5], out=isWriteToA);
+    And(a=instruction[15], b=instruction[3], out=writeM);
+    Mux16(a=instruction, b=compOut, sel=instruction[15], out=registerAInput);
+    ARegister(in=registerAInput, load=isWriteToA, out=registerAOut);
+    And(a=instruction[12], b=instruction[15], out=useMForALU);
+    Mux16(a=registerAOut, b=inM, sel=useMForALU, out=registerAOrM);
+    ALU(x=registerDOut, y=registerAOrM, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=compOut, zr=zr, ng=ls);
+    And(a=instruction[15], b=instruction[4], out=isWriteD);
+    DRegister(in=compOut, load=isWriteD, out=registerDOut);
+    Not(in=ls, out=nl);
+    Not(in=zr, out=notZr);
+    And(a=nl, b=notZr, out=gt);
+    And(a=instruction[0], b=gt, out=jump1);
+    And(a=instruction[1], b=zr, out=jump2);
+    And(a=instruction[2], b=ls, out=jump3);
+    Or(a=jump1, b=jump2, out=jump12);
+    Or(a=jump12, b=jump3, out=jump4);
+    And(a=instruction[15], b=jump4, out=jump);
+    Not(in=jump, out=notJump);
+    PC(in=registerAOut, load=jump, inc=notJump, reset=reset, out[0..14]=pc);
+    And16(a=true, b=registerAOut, out[0..14]=addressM);
+    And16(a=compOut, b=true, out=outM);
+}

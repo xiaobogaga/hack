@@ -1,4 +1,4 @@
-module nands
+module hack
 
 go 1.12
 
