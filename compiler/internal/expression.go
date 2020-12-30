@@ -30,22 +30,25 @@ func buildExpressionsTree(ops []*OpAst, exprTerms []*ExpressionTerm) *Expression
 	//	i++
 	//}
 	//return makeNewExpression(expressionStack[0], expressionStack[1], ops[0])
-	return buildExpressionsTree0(ops, expressionStack)
+	ret, _ := buildExpressionsTree0(ops, expressionStack, 0, 0)
+	return ret.(*ExpressionAst)
 }
 
-func buildExpressionsTree0(ops []*OpAst, exprTerms []interface{}) *ExpressionAst {
-	if len(ops) == 1 {
-		return makeNewExpression(exprTerms[0], exprTerms[1], ops[0])
+func buildExpressionsTree0(ops []*OpAst, exprTerms []interface{}, loc int, minPriority int) (interface{}, int) {
+	lhs := exprTerms[loc]
+	i := loc
+	for i < len(ops) && ops[i].priority >= minPriority {
+		op := ops[i]
+		rhs := exprTerms[i+1]
+		j := i + 1
+		for j < len(ops) && ops[j].priority > op.priority {
+			rhs, j = buildExpressionsTree0(ops, exprTerms, j, ops[j].priority)
+		}
+		lhs = makeNewExpression(lhs, rhs, op)
+		exprTerms[j] = lhs
+		i = j
 	}
-	lastOp := ops[0]
-	nextOp := ops[1]
-	if lastOp.priority >= nextOp.priority {
-		newExpr := makeNewExpression(exprTerms[0], exprTerms[1], lastOp)
-		exprTerms[1] = newExpr
-		return buildExpressionsTree0(ops[1:], exprTerms[1:])
-	}
-	expr := buildExpressionsTree0(ops[1:], exprTerms[1:])
-	return makeNewExpression(exprTerms[0], expr, lastOp)
+	return lhs, i
 }
 
 func makeNewExpression(leftExpr interface{}, rightExpr interface{}, op *OpAst) *ExpressionAst {
@@ -181,7 +184,7 @@ func (parser *Parser) parseSubRoutineCallExpressionOrVarExpressionTerm() (*Expre
 				Type:  VarNameExpressionTermType,
 				Value: expr.Value.(string),
 			},
-			Op:        &OpAst{OpTP: BinaryOPTP, Op: ArrayIndexOpTP, priority: 3},
+			Op:        &ArrayIndexOpAst,
 			RightExpr: exprAst,
 		}, ArrayIndexExpressionTermType
 	case DotTP, LeftParentThesesTP:
@@ -263,37 +266,27 @@ func (parser *Parser) parseOpAst() (*OpAst, error) {
 		return nil, parser.makeError(false)
 	}
 	// Todo: we can use different priority for these.
+	var op *OpAst
 	token := parser.currentTokens[parser.currentTokenPos]
-	op := new(OpAst)
-	op.OpTP = BinaryOPTP
 	switch token.tp {
 	case AddTP:
-		op.Op = AddOpTP
-		op.priority = 1
+		op = &AddOpAst
 	case MinusTP:
-		op.Op = MinusOpTP
-		op.priority = 1
+		op = &MinusOpAst
 	case MultiplyTP:
-		op.Op = MultipleOpTP
-		op.priority = 2
+		op = &MultipleOpAst
 	case DivideTP:
-		op.Op = DivideOpTP
-		op.priority = 2
+		op = &DivideOpAst
 	case AndTP:
-		op.Op = AndOpTP
-		op.priority = 0
+		op = &AndOpAst
 	case OrTP:
-		op.Op = OrOpTP
-		op.priority = 0
+		op = &OrOpAst
 	case GreaterTP:
-		op.Op = GreaterOpTP
-		op.priority = 1
+		op = &GreatOpAst
 	case LessTP:
-		op.Op = LessOpTP
-		op.priority = 1
+		op = &LessOpAst
 	case EqualTP:
-		op.Op = EqualOpTp
-		op.priority = 1
+		op = &EqualOpAst
 	default:
 		return nil, parser.makeError(true)
 	}
@@ -306,8 +299,6 @@ func (parser *Parser) matchOp() bool {
 		return false
 	}
 	token, _ := parser.getCurrentToken()
-	op := new(OpAst)
-	op.OpTP = BinaryOPTP
 	switch token.tp {
 	case AddTP, MinusTP, MultiplyTP, DivideTP, AndTP, OrTP, GreaterTP, LessTP, EqualTP:
 		return true

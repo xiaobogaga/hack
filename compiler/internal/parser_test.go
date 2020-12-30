@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -20,12 +21,15 @@ func TestParser_ParseExpression(t *testing.T) {
 	}{
 		{Content: "a + b"},
 		{Content: "a + b * c"},
+		{Content: "a * b + c * d"},
 		{Content: "a[1 + e * f] * g + b * c"},
 		{Content: "a.b(d, e * i) + c * f + g[h * i]"},
 		{Content: "a.b(c[1] + d.e(f)) + g[i * j.l(m)] + h"},
 		{Content: "b(c, e) + f"},
 		{Content: "(a + b + (c * (a + (b)))) * c + (a * (a + b))"},
 		{Content: "a = 1 & c = 2"},
+		{Content: "i = 1 * 1 + 1 | j = 2"},
+		{Content: "i | j = 2 + 1 = 3 * 2 - 1 | 0 * 4 & h / 3 | 8 > 3 | 3 * 2 + 1 < 9"},
 	}
 	tokenizer := &Tokenizer{}
 	parser := &Parser{}
@@ -48,11 +52,30 @@ func printExprAst(ast *ExpressionAst) {
 	if ast == nil {
 		return
 	}
-	data, err := json.MarshalIndent(ast, "", "\t")
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "\t\t")
+	err := encoder.Encode(ast)
 	if err != nil {
 		panic(err)
 	}
-	println(string(data))
+	println(buf.String())
+	printExprAstAsXml(ast)
+}
+
+func printExprAstAsXml(ast *ExpressionAst) {
+	if ast == nil {
+		return
+	}
+	buf := &bytes.Buffer{}
+	encoder := xml.NewEncoder(buf)
+	encoder.Indent("", "\t\t")
+	err := encoder.Encode(ast)
+	if err != nil {
+		panic(err)
+	}
+	println(buf.String())
 }
 
 func TestParser_ParseReturnStatement(t *testing.T) {

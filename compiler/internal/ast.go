@@ -166,7 +166,23 @@ type OpAst struct {
 	OpTP     OpType
 	Op       OpCode
 	priority int
+	Name     string
 }
+
+var (
+	AddOpAst        = OpAst{OpTP: BinaryOPTP, Op: AddOpTP, priority: 3, Name: "+"}
+	MinusOpAst      = OpAst{OpTP: BinaryOPTP, Op: MinusOpTP, priority: 3, Name: "-"}
+	MultipleOpAst   = OpAst{OpTP: BinaryOPTP, Op: MultipleOpTP, priority: 4, Name: "*"}
+	DivideOpAst     = OpAst{OpTP: BinaryOPTP, Op: DivideOpTP, priority: 4, Name: "/"}
+	AndOpAst        = OpAst{OpTP: BinaryOPTP, Op: AndOpTP, priority: 1, Name: "&"}
+	OrOpAst         = OpAst{OpTP: BinaryOPTP, Op: OrOpTP, priority: 1, Name: "|"}
+	LessOpAst       = OpAst{OpTP: BinaryOPTP, Op: LessOpTP, priority: 2, Name: "<"}
+	LessEqualOpAst  = OpAst{OpTP: BinaryOPTP, Op: LessEqualOpTP, priority: 2, Name: "<="}
+	GreatOpAst      = OpAst{OpTP: BinaryOPTP, Op: GreaterOpTP, priority: 2, Name: ">"}
+	GreatEqualOpAst = OpAst{OpTP: BinaryOPTP, Op: GreaterEqualOpTP, priority: 2, Name: ">="}
+	EqualOpAst      = OpAst{OpTP: BinaryOPTP, Op: EqualOpTp, priority: 2, Name: "="}
+	ArrayIndexOpAst = OpAst{OpTP: BinaryOPTP, Op: ArrayIndexOpTP, priority: 5, Name: "[]"}
+)
 
 func (op OpAst) String() string {
 	switch op.Op {
@@ -184,8 +200,12 @@ func (op OpAst) String() string {
 		return "|"
 	case LessOpTP:
 		return "<"
+	case LessEqualOpTP:
+		return "<="
 	case GreaterOpTP:
 		return ">"
+	case GreaterEqualOpTP:
+		return ">="
 	case EqualOpTp:
 		return "="
 	case ArrayIndexOpTP:
@@ -211,7 +231,9 @@ const (
 	AndOpTP
 	OrOpTP
 	LessOpTP
+	LessEqualOpTP
 	GreaterOpTP
+	GreaterEqualOpTP
 	EqualOpTp
 	ArrayIndexOpTP
 
