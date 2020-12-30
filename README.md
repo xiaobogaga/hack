@@ -1,4 +1,4 @@
-a hack computer implementations:
+a hack computer and toolchain implementations including:
 
 * A computer hack described in hdl language.
 * An assembler for the hack instruction set
