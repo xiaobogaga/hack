@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	path        = flag.String("path", "/Users/xiaobo.zhu/go/src/nands/compiler/test/11/Square", "the path of jack files needs to be compiled")
+	path        = flag.String("path", ".", "the path of jack files needs to be compiled")
 	skipChecker = flag.Bool("skip_check", true, "whether skip check")
 )
 
