@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"nands/compiler/internal"
+	"github.com/xiaobogaga/hack/compiler/internal"
 )
 
 var (

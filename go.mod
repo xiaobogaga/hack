@@ -1,4 +1,4 @@
-module hack
+module github.com/xiaobogaga/hack
 
 go 1.12
 
